@@ -1,23 +1,24 @@
-<<<<<<< Updated upstream
-import { useState } from 'react';
-=======
 import { useState, useEffect } from 'react';
->>>>>>> Stashed changes
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-<<<<<<< Updated upstream
-import { ArrowLeft, UserPlus, User, Clock, Activity, CheckCircle2 } from 'lucide-react';
-import { Badge } from './ui/badge';
-=======
-import { ArrowLeft, UserPlus, User, Clock, Activity, CheckCircle2, Shield,Settings } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  UserPlus, 
+  User, 
+  Clock, 
+  Activity, 
+  CheckCircle2, 
+  Shield, 
+  Settings,
+  XCircle
+} from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from "../supabase_client";
 import { PatientSettingsDialog } from './PatientSettingsDialog';
->>>>>>> Stashed changes
 
 interface UserSession {
   id: string;
@@ -29,6 +30,8 @@ interface UserSession {
   age?: number;
   gender?: string;
   email?: string;
+  patient_user_id?: string;
+  login_configured?: boolean;
   notes?: string;
 }
 
@@ -38,36 +41,7 @@ interface CaregiverSpaceProps {
 }
 
 export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
-<<<<<<< Updated upstream
-  const [users, setUsers] = useState<UserSession[]>([
-    {
-      id: '1',
-      name: 'Emma',
-      createdDate: '2025-10-15',
-      lastActive: '2025-11-03',
-      completedScenarios: 4,
-      totalScenarios: 6,
-    },
-    {
-      id: '2',
-      name: 'Oliver',
-      createdDate: '2025-10-20',
-      lastActive: '2025-11-02',
-      completedScenarios: 2,
-      totalScenarios: 6,
-    },
-    {
-      id: '3',
-      name: 'Sophia',
-      createdDate: '2025-10-28',
-      lastActive: '2025-11-04',
-      completedScenarios: 6,
-      totalScenarios: 6,
-    },
-  ]);
-=======
   const { user, isTherapist, loading } = useAuth();
->>>>>>> Stashed changes
   
   const [users, setUsers] = useState<UserSession[]>([]);
   const [newUserName, setNewUserName] = useState('');
@@ -81,9 +55,6 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<UserSession | null>(null);
 
-<<<<<<< Updated upstream
-  const handleCreateUser = (e: React.FormEvent) => {
-=======
   // 治疗师身份验证和保护
   useEffect(() => {
     if (!loading) {
@@ -176,6 +147,8 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
             age: patient.age,
             gender: patient.gender,
             email: patient.email,
+            patient_user_id: patient.patient_user_id,
+            login_configured: patient.login_configured,
             notes: patient.notes,
             createdDate: patient.created_at,
             lastActive: lastActive,
@@ -196,7 +169,6 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
 
   // 创建新患者
   const handleCreateUser = async (e: React.FormEvent) => {
->>>>>>> Stashed changes
     e.preventDefault();
     if (!newUserName.trim() || !user) return;
 
@@ -273,10 +245,10 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    if (diffDays === 0) return '今天';
+    if (diffDays === 1) return '昨天';
+    if (diffDays < 7) return `${diffDays} 天前`;
+    return date.toLocaleDateString('zh-CN');
   };
 
   // 显示加载状态
@@ -365,16 +337,29 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
             className="mb-6 gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Home
+            返回首页
           </Button>
 
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h1 className="mb-2 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Caregiver Space
-              </h1>
-              <p className="text-gray-600">
-                Manage sessions for children and track their progress
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                  治疗师工作台
+                </h1>
+                <Badge className="bg-purple-100 text-purple-800 border-purple-200 gap-1">
+                  <Shield className="w-3 h-3" />
+                  治疗师模式
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-gray-600">
+                <span>欢迎，</span>
+                <span className="font-semibold text-purple-600">
+                  {user.user_metadata?.name || user.user_metadata?.full_name || '治疗师'}
+                </span>
+                <span>医生！</span>
+              </div>
+              <p className="text-gray-600 mt-1">
+                管理儿童会话并跟踪他们的进度
               </p>
             </div>
 
@@ -383,20 +368,20 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
               <DialogTrigger asChild>
                 <Button className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
                   <UserPlus className="w-5 h-5" />
-                  Create New Session
+                  创建新会话
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Create New Session</DialogTitle>
+                  <DialogTitle>创建新会话</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
                   <div>
-                    <Label htmlFor="userName">Child's Name</Label>
+                    <Label htmlFor="userName">儿童姓名</Label>
                     <Input
                       id="userName"
                       type="text"
-                      placeholder="Enter child's name"
+                      placeholder="请输入儿童姓名"
                       value={newUserName}
                       onChange={(e) => setNewUserName(e.target.value)}
                       className="mt-2"
@@ -408,11 +393,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                     disabled={!newUserName.trim() || isCreating}
                   >
-<<<<<<< Updated upstream
-                    Create Session
-=======
                     {isCreating ? '创建中...' : '创建会话'}
->>>>>>> Stashed changes
                   </Button>
                 </form>
               </DialogContent>
@@ -422,39 +403,39 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card className="p-6 border-2">
+          <Card className="p-6 border-2 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center">
                 <User className="w-6 h-6 text-blue-600" />
               </div>
               <div>
-                <p className="text-2xl">{users.length}</p>
-                <p className="text-sm text-gray-600">Active Sessions</p>
+                <p className="text-2xl font-bold text-gray-900">{users.length}</p>
+                <p className="text-sm text-gray-600">活跃会话</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6 border-2">
+          <Card className="p-6 border-2 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
                 <CheckCircle2 className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <p className="text-2xl">
+                <p className="text-2xl font-bold text-gray-900">
                   {users.reduce((sum, user) => sum + user.completedScenarios, 0)}
                 </p>
-                <p className="text-sm text-gray-600">Total Completions</p>
+                <p className="text-sm text-gray-600">总完成数</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6 border-2">
+          <Card className="p-6 border-2 hover:shadow-md transition-shadow">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center">
                 <Activity className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-2xl">
+                <p className="text-2xl font-bold text-gray-900">
                   {users.length > 0 
                     ? Math.round(
                         (users.reduce((sum, user) => sum + user.completedScenarios, 0) /
@@ -463,7 +444,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       )
                     : 0}%
                 </p>
-                <p className="text-sm text-gray-600">Avg Progress</p>
+                <p className="text-sm text-gray-600">平均进度</p>
               </div>
             </div>
           </Card>
@@ -471,23 +452,23 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
 
         {/* Session Cards */}
         <div>
-          <h2 className="mb-6">Sessions</h2>
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900">会话管理</h2>
           
           {users.length === 0 ? (
-            <Card className="p-12 text-center border-2 border-dashed">
+            <Card className="p-12 text-center border-2 border-dashed hover:shadow-md transition-shadow">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
                 <User className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="mb-2 text-gray-600">No sessions yet</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-600">暂无会话</h3>
               <p className="text-gray-500 mb-6">
-                Create a new session to get started
+                创建第一个会话来开始管理
               </p>
               <Button 
                 onClick={() => setIsDialogOpen(true)}
                 className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
                 <UserPlus className="w-5 h-5" />
-                Create First Session
+                创建第一个会话
               </Button>
             </Card>
           ) : (
@@ -516,40 +497,52 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       {/* Avatar */}
                       <div className="flex-shrink-0">
                         <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300">
-                          <span className="text-2xl">{getInitials(user.name)}</span>
+                          <span className="text-2xl font-semibold">{getInitials(user.name)}</span>
                         </div>
                       </div>
 
                       {/* User Info */}
                       <div className="flex-1 min-w-0">
-<<<<<<< Updated upstream
-                        <h3 className="mb-2">{user.name}</h3>
-=======
                         <div className="flex items-start justify-between mb-2">
                           <h3 className="text-xl font-semibold text-gray-900">{user.name}</h3>
-                          {/* 显示额外信息 */}
-                          {(user.age || user.gender) && (
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
-                              {user.age && <span>{user.age} years</span>}
-                              {user.gender && <span>• {user.gender}</span>}
-                              {user.email && (
-                                <Badge variant="outline" className="text-xs">
-                                  {user.email}
-                                </Badge>
-                              )}
-                            </div>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {/* 账户状态 */}
+                            {user.login_configured ? (
+                              <Badge className="bg-green-100 text-green-800 border-green-200 gap-1">
+                                <CheckCircle2 className="w-3 h-3" />
+                                Account
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-gray-500 gap-1">
+                                <XCircle className="w-3 h-3" />
+                                No Account
+                              </Badge>
+                            )}
+                            {/* 额外信息 */}
+                            {(user.age || user.gender) && (
+                              <div className="flex items-center gap-2 text-sm text-gray-500">
+                                {user.age && <span>{user.age} years</span>}
+                                {user.gender && <span>• {user.gender}</span>}
+                              </div>
+                            )}
+                          </div>
                         </div>
                         
->>>>>>> Stashed changes
+                        {/* 显示邮箱如果已配置 */}
+                        {user.email && (
+                          <div className="text-sm text-gray-600 mb-2">
+                            <span className="font-medium">Email:</span> {user.email}
+                          </div>
+                        )}
+                        
                         <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>Last active: {formatDate(user.lastActive)}</span>
+                            <span>最后活动: {formatDate(user.lastActive)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
-                            <span>Created: {formatDate(user.createdDate)}</span>
+                            <span>创建时间: {formatDate(user.createdDate)}</span>
                           </div>
                         </div>
 
@@ -557,8 +550,8 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                         <div className="flex items-center gap-4">
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-gray-600">Progress</span>
-                              <span className="text-sm">{progressPercentage}%</span>
+                              <span className="text-sm text-gray-600">进度</span>
+                              <span className="text-sm font-medium">{progressPercentage}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-3">
                               <div
@@ -568,7 +561,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                             </div>
                           </div>
                           <Badge variant="outline" className="flex-shrink-0">
-                            {user.completedScenarios}/{user.totalScenarios} scenarios
+                            {user.completedScenarios}/{user.totalScenarios} 个场景
                           </Badge>
                         </div>
                       </div>
@@ -576,9 +569,9 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       {/* Completion Badge */}
                       {user.completedScenarios === user.totalScenarios && (
                         <div className="flex-shrink-0">
-                          <Badge className="bg-green-100 text-green-800 border-green-200">
-                            <CheckCircle2 className="w-4 h-4 mr-1" />
-                            Completed
+                          <Badge className="bg-green-100 text-green-800 border-green-200 gap-1">
+                            <CheckCircle2 className="w-4 h-4" />
+                            已完成
                           </Badge>
                         </div>
                       )}

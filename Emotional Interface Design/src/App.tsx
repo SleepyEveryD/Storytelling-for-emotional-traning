@@ -1,35 +1,16 @@
-<<<<<<< Updated upstream
-import { useState } from 'react';
-=======
 import { useState, useEffect } from 'react';
->>>>>>> Stashed changes
 import { WelcomePage } from './components/WelcomePage';
 import { CaregiverSpace } from './components/CaregiverSpace';
 import { ScenarioSelection } from './components/ScenarioSelection';
 import { StoryViewer } from './components/StoryViewer';
+import { Login } from './components/Login';
 import { Toaster } from './components/ui/sonner';
 import { Button } from './components/ui/button';
 import { Home } from 'lucide-react';
+import { AuthContextProvider, useAuth } from './context/AuthContext';
 
-type AppView = 'welcome' | 'caregiver-space' | 'scenarios' | 'story';
+type AppView = 'login' | 'welcome' | 'caregiver-space' | 'scenarios' | 'story';
 
-<<<<<<< Updated upstream
-const SCENARIO_IDS = [
-  'family-conflict',
-  'workplace-feedback',
-  'friendship-betrayal',
-  'social-anxiety',
-  'romantic-miscommunication',
-  'academic-pressure'
-];
-
-export default function App() {
-  const [currentView, setCurrentView] = useState<AppView>('welcome');
-  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null);
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ [key: string]: number }>({});
-  const [showWelcome, setShowWelcome] = useState(true);
-=======
 function AppContent() {
   const { isTherapist, user, loading } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>('login');
@@ -55,59 +36,28 @@ function AppContent() {
     setSelectedScenario(null);
     setCurrentView('scenarios');
   };
->>>>>>> Stashed changes
 
-  const getRandomScenario = () => {
-    const randomIndex = Math.floor(Math.random() * SCENARIO_IDS.length);
-    return SCENARIO_IDS[randomIndex];
-  };
-
-  const handleMicrophoneClick = () => {
-    const randomScenario = getRandomScenario();
-    setSelectedScenario(randomScenario);
-    setCurrentView('story');
-  };
-
-  const handleNavigateToCaregiverSpace = () => {
-    setCurrentView('caregiver-space');
-  };
-
-  const handleBackFromCaregiverSpace = () => {
-    setCurrentView('welcome');
-  };
-
-  const handleSelectUserFromCaregiver = (userId: string, userName: string) => {
-    setSelectedUser({ id: userId, name: userName });
-    setCurrentView('scenarios');
-    setShowWelcome(false);
-  };
-
-  const handleScenarioSelect = (scenarioId: string) => {
+  // 纯页面跳转函数
+  const navigateToLogin = () => setCurrentView('login');
+  const navigateToWelcome = () => setCurrentView('welcome');
+  const navigateToCaregiverSpace = () => setCurrentView('caregiver-space');
+  const navigateToScenarios = () => setCurrentView('scenarios');
+  const navigateToStory = (scenarioId: string) => {
     setSelectedScenario(scenarioId);
     setCurrentView('story');
   };
 
-  const handleScenarioComplete = (scenarioId: string, score: number) => {
-    setProgress(prev => ({ ...prev, [scenarioId]: score }));
+  // 返回函数
+  const backToMenu = () => {
     setSelectedScenario(null);
     setCurrentView('scenarios');
   };
 
-  const handleBackToMenu = () => {
+  const backToWelcome = () => {
     setSelectedScenario(null);
-    setCurrentView('scenarios');
-  };
-
-  const handleBackToWelcome = () => {
     setCurrentView('welcome');
-    setSelectedUser(null);
-    setShowWelcome(true);
   };
 
-<<<<<<< Updated upstream
-  const handleStartJourney = () => {
-    setShowWelcome(false);
-=======
   const handleLogin = (role: 'user' | 'therapist', name: string, userId: string) => {
     console.log('User logged in:', { role, name, userId });
     navigateToWelcome();
@@ -129,7 +79,6 @@ function AppContent() {
 
     console.log('用户是治疗师，跳转到治疗师空间');
     navigateToCaregiverSpace();
->>>>>>> Stashed changes
   };
 
   // 处理用户选择（从治疗师空间）
@@ -178,11 +127,11 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Back to Home Button - shown in scenarios and story views */}
+      {/* 返回首页按钮 */}
       {(currentView === 'scenarios' || currentView === 'story') && (
         <div className="absolute top-4 left-4 z-10">
           <Button 
-            onClick={handleBackToWelcome}
+            onClick={backToWelcome}
             variant="outline"
             className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
           >
@@ -192,35 +141,27 @@ function AppContent() {
         </div>
       )}
       
+      {/* 页面路由 */}
+      {currentView === 'login' && (
+        <Login onLogin={handleLogin} />
+      )}
+
       {currentView === 'welcome' && (
         <WelcomePage
-          onMicrophoneClick={handleMicrophoneClick}
+          onMicrophoneClick={() => navigateToStory('random')}
           onNavigateToCaregiverSpace={handleNavigateToCaregiverSpace}
         />
       )}
 
       {currentView === 'caregiver-space' && (
         <CaregiverSpace
-<<<<<<< Updated upstream
-          onBack={handleBackFromCaregiverSpace}
-          onSelectUser={handleSelectUserFromCaregiver}
-=======
           onBack={backToWelcome}
           onSelectUser={handleSelectUser}
->>>>>>> Stashed changes
         />
       )}
 
       {currentView === 'scenarios' && (
         <ScenarioSelection 
-<<<<<<< Updated upstream
-          onSelectScenario={handleScenarioSelect}
-          progress={progress}
-          showWelcome={showWelcome}
-          onStartJourney={handleStartJourney}
-          userRole="user"
-          userName={selectedUser?.name || 'User'}
-=======
           onSelectScenario={handleSelectScenario}
           progress={userProgress}
           showWelcome={showWelcome}
@@ -228,7 +169,6 @@ function AppContent() {
           userRole={isTherapist ? 'therapist' : 'user'}
           userName={selectedUserName || user?.user_metadata?.name || 'User'}
           userId={selectedUserId || user?.id || ''}
->>>>>>> Stashed changes
         />
       )}
 
@@ -236,17 +176,21 @@ function AppContent() {
         <StoryViewer
           scenarioId={selectedScenario}
           onComplete={handleScenarioComplete}
-<<<<<<< Updated upstream
-          onBack={handleBackToMenu}
-=======
           onBack={backToMenu}
           patientId={currentPatientId || selectedUserId || user?.id} // 修复：使用正确的患者ID
           patientName={currentPatientName || selectedUserName || user?.user_metadata?.name} // 修复：使用正确的患者姓名
->>>>>>> Stashed changes
         />
       )}
 
       <Toaster />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthContextProvider>
+      <AppContent />
+    </AuthContextProvider>
   );
 }
