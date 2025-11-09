@@ -262,9 +262,12 @@ export function Login({ onLogin }: LoginProps) {
             )}
 
             <div className="mb-4">
-              <Label htmlFor="email" className="mb-2 block text-sm font-medium">
-                Email Address
-              </Label>
+              <div className="flex items-center gap-2 mb-2">
+                <Mail className="w-4 h-4 text-gray-400" />
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email Address
+                </Label>
+              </div>
               <div className="relative">
                 <Input
                   id="email"
@@ -275,14 +278,25 @@ export function Login({ onLogin }: LoginProps) {
                   className="pl-10"
                   required
                 />
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               </div>
             </div>
 
             <div className="mb-4">
-              <Label htmlFor="password" className="mb-2 block text-sm font-medium">
-                Password
-              </Label>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-gray-400" />
+                  <Label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="text-gray-400 hover:text-gray-600 mr-2"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
@@ -290,17 +304,9 @@ export function Login({ onLogin }: LoginProps) {
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
+                  className="pl-10"
                   required
                 />
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
               </div>
               {authMode === 'register' && (
                 <p className="text-xs text-gray-500 mt-1">
@@ -311,9 +317,12 @@ export function Login({ onLogin }: LoginProps) {
 
             {authMode === 'register' && (
               <div className="mb-6">
-                <Label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium">
-                  Confirm Password
-                </Label>
+                <div className="flex items-center gap-2 mb-2">
+                  <Lock className="w-4 h-4 text-gray-400" />
+                  <Label htmlFor="confirmPassword" className="text-sm font-medium">
+                    Confirm Password
+                  </Label>
+                </div>
                 <div className="relative">
                   <Input
                     id="confirmPassword"
@@ -324,7 +333,6 @@ export function Login({ onLogin }: LoginProps) {
                     className="pl-10"
                     required
                   />
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 </div>
               </div>
             )}
