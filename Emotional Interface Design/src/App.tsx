@@ -1,88 +1,78 @@
+// App.tsx
 import { useState } from 'react';
 import { WelcomePage } from './components/WelcomePage';
 import { CaregiverSpace } from './components/CaregiverSpace';
 import { ScenarioSelection } from './components/ScenarioSelection';
 import { StoryViewer } from './components/StoryViewer';
+import { Login } from './components/Login';
 import { Toaster } from './components/ui/sonner';
 import { Button } from './components/ui/button';
 import { Home } from 'lucide-react';
+import { AuthContextProvider, useAuth } from './context/AuthContext';
 
-type AppView = 'welcome' | 'caregiver-space' | 'scenarios' | 'story';
+type AppView = 'login' | 'welcome' | 'caregiver-space' | 'scenarios' | 'story';
 
-const SCENARIO_IDS = [
-  'family-conflict',
-  'workplace-feedback',
-  'friendship-betrayal',
-  'social-anxiety',
-  'romantic-miscommunication',
-  'academic-pressure'
-];
-
-export default function App() {
-  const [currentView, setCurrentView] = useState<AppView>('welcome');
-  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string } | null>(null);
+// 将 AppContent 移出，以便使用 useAuth Hook
+function AppContent() {
+  const { isTherapist, user } = useAuth();
+  const [currentView, setCurrentView] = useState<AppView>('login');
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ [key: string]: number }>({});
-  const [showWelcome, setShowWelcome] = useState(true);
 
-  const getRandomScenario = () => {
-    const randomIndex = Math.floor(Math.random() * SCENARIO_IDS.length);
-    return SCENARIO_IDS[randomIndex];
-  };
-
-  const handleMicrophoneClick = () => {
-    const randomScenario = getRandomScenario();
-    setSelectedScenario(randomScenario);
-    setCurrentView('story');
-  };
-
-  const handleNavigateToCaregiverSpace = () => {
-    setCurrentView('caregiver-space');
-  };
-
-  const handleBackFromCaregiverSpace = () => {
-    setCurrentView('welcome');
-  };
-
-  const handleSelectUserFromCaregiver = (userId: string, userName: string) => {
-    setSelectedUser({ id: userId, name: userName });
-    setCurrentView('scenarios');
-    setShowWelcome(false);
-  };
-
-  const handleScenarioSelect = (scenarioId: string) => {
+  // 纯页面跳转函数
+  const navigateToLogin = () => setCurrentView('login');
+  const navigateToWelcome = () => setCurrentView('welcome');
+  const navigateToCaregiverSpace = () => setCurrentView('caregiver-space');
+  const navigateToScenarios = () => setCurrentView('scenarios');
+  const navigateToStory = (scenarioId: string) => {
     setSelectedScenario(scenarioId);
     setCurrentView('story');
   };
 
-  const handleScenarioComplete = (scenarioId: string, score: number) => {
-    setProgress(prev => ({ ...prev, [scenarioId]: score }));
+  // 返回函数
+  const backToMenu = () => {
     setSelectedScenario(null);
     setCurrentView('scenarios');
   };
 
-  const handleBackToMenu = () => {
+  const backToWelcome = () => {
     setSelectedScenario(null);
-    setCurrentView('scenarios');
-  };
-
-  const handleBackToWelcome = () => {
     setCurrentView('welcome');
-    setSelectedUser(null);
-    setShowWelcome(true);
   };
 
-  const handleStartJourney = () => {
-    setShowWelcome(false);
+  const handleLogin = (role: 'user' | 'therapist', name: string, userId: string) => {
+    console.log('User logged in:', { role, name, userId });
+    navigateToWelcome();
+  };
+
+  // 处理导航到治疗师空间的函数
+  const handleNavigateToCaregiverSpace = () => {
+    if (!user) {
+      // 用户未登录，跳转到登录页面
+      console.log('用户未登录，跳转到登录页面');
+      navigateToLogin();
+      return;
+    }
+
+    if (!isTherapist) {
+      // 用户已登录但不是治疗师，显示提示并跳转到登录页面
+      console.log('用户不是治疗师，跳转到登录页面');
+      // 可以在这里添加一个提示消息
+      navigateToLogin();
+      return;
+    }
+
+    // 用户是治疗师，正常跳转
+    console.log('用户是治疗师，跳转到治疗师空间');
+    navigateToCaregiverSpace();
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Back to Home Button - shown in scenarios and story views */}
+      {/* 返回首页按钮 */}
       {(currentView === 'scenarios' || currentView === 'story') && (
         <div className="absolute top-4 left-4 z-10">
           <Button 
-            onClick={handleBackToWelcome}
+            onClick={backToWelcome}
             variant="outline"
             className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
           >
@@ -92,40 +82,49 @@ export default function App() {
         </div>
       )}
       
+      {/* 页面路由 */}
+      {currentView === 'login' && (
+        <Login onLogin={handleLogin} />
+      )}
+
       {currentView === 'welcome' && (
         <WelcomePage
-          onMicrophoneClick={handleMicrophoneClick}
+          onMicrophoneClick={() => navigateToStory('random')}
           onNavigateToCaregiverSpace={handleNavigateToCaregiverSpace}
         />
       )}
 
       {currentView === 'caregiver-space' && (
         <CaregiverSpace
-          onBack={handleBackFromCaregiverSpace}
-          onSelectUser={handleSelectUserFromCaregiver}
+          onBack={backToWelcome}
+          onSelectUser={navigateToScenarios}
         />
       )}
 
       {currentView === 'scenarios' && (
         <ScenarioSelection 
-          onSelectScenario={handleScenarioSelect}
-          progress={progress}
-          showWelcome={showWelcome}
-          onStartJourney={handleStartJourney}
-          userRole="user"
-          userName={selectedUser?.name || 'User'}
+          onSelectScenario={navigateToStory}
+          onBack={backToWelcome}
         />
       )}
 
       {currentView === 'story' && selectedScenario && (
         <StoryViewer 
           scenarioId={selectedScenario}
-          onComplete={handleScenarioComplete}
-          onBack={handleBackToMenu}
+          onComplete={backToMenu}
+          onBack={backToMenu}
         />
       )}
 
       <Toaster />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthContextProvider>
+      <AppContent />
+    </AuthContextProvider>
   );
 }
