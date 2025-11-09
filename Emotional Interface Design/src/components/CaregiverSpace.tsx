@@ -11,14 +11,11 @@ import {
   Clock, 
   Activity, 
   CheckCircle2, 
-  Shield, 
-  Settings,
-  XCircle
+  Shield
 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from "../supabase_client";
-import { PatientSettingsDialog } from './PatientSettingsDialog';
 
 interface UserSession {
   id: string;
@@ -50,10 +47,6 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
   const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
-  
-  // 患者设置相关状态
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<UserSession | null>(null);
 
   // 治疗师身份验证和保护
   useEffect(() => {
@@ -216,18 +209,6 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
     setCurrentPatientName(userName);
     // 调用父组件的回调函数，传递患者信息
     onSelectUser(userId, userName, userId, userName);
-  };
-
-  // 打开设置对话框
-  const handleOpenSettings = (user: UserSession, e: React.MouseEvent) => {
-    e.stopPropagation(); // 防止触发卡片点击事件
-    setSelectedPatient(user);
-    setSettingsOpen(true);
-  };
-
-  // 患者信息更新后的回调
-  const handlePatientUpdated = () => {
-    fetchPatients(); // 重新加载患者数据
   };
 
   const getInitials = (name: string) => {
@@ -481,18 +462,9 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                 return (
                   <Card
                     key={user.id}
-                    className="p-6 border-2 hover:shadow-xl transition-all duration-300 hover:border-purple-300 cursor-pointer group relative"
+                    className="p-6 border-2 hover:shadow-xl transition-all duration-300 hover:border-purple-300 cursor-pointer group"
                     onClick={() => handleSelectUser(user.id, user.name)}
                   >
-                    {/* 设置按钮 - 添加到右上角 */}
-                    <button
-                      onClick={(e) => handleOpenSettings(user, e)}
-                      className="absolute top-4 right-4 p-2 rounded-lg bg-gray-100 hover:bg-gray-200 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                      title="Patient Settings"
-                    >
-                      <Settings className="w-4 h-4 text-gray-600" />
-                    </button>
-
                     <div className="flex items-center gap-6">
                       {/* Avatar */}
                       <div className="flex-shrink-0">
@@ -505,35 +477,14 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-2">
                           <h3 className="text-xl font-semibold text-gray-900">{user.name}</h3>
-                          <div className="flex items-center gap-2">
-                            {/* 账户状态 */}
-                            {user.login_configured ? (
-                              <Badge className="bg-green-100 text-green-800 border-green-200 gap-1">
-                                <CheckCircle2 className="w-3 h-3" />
-                                Account
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-gray-500 gap-1">
-                                <XCircle className="w-3 h-3" />
-                                No Account
-                              </Badge>
-                            )}
-                            {/* 额外信息 */}
-                            {(user.age || user.gender) && (
-                              <div className="flex items-center gap-2 text-sm text-gray-500">
-                                {user.age && <span>{user.age} years</span>}
-                                {user.gender && <span>• {user.gender}</span>}
-                              </div>
-                            )}
-                          </div>
+                          {/* 额外信息 */}
+                          {(user.age || user.gender) && (
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                              {user.age && <span>{user.age} years</span>}
+                              {user.gender && <span>• {user.gender}</span>}
+                            </div>
+                          )}
                         </div>
-                        
-                        {/* 显示邮箱如果已配置 */}
-                        {user.email && (
-                          <div className="text-sm text-gray-600 mb-2">
-                            <span className="font-medium">Email:</span> {user.email}
-                          </div>
-                        )}
                         
                         <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
                           <div className="flex items-center gap-1">
@@ -598,14 +549,6 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
           </div>
         )}
       </div>
-
-      {/* 患者设置对话框 */}
-      <PatientSettingsDialog
-        patient={selectedPatient}
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        onPatientUpdated={handlePatientUpdated}
-      />
     </div>
   );
 }

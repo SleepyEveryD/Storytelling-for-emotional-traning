@@ -3,7 +3,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
-import { Heart, Users, Briefcase, Home, School, Coffee, Sparkles, CheckCircle2, ArrowRight, Info } from 'lucide-react';
+import { Heart, Users, Briefcase, Home, School, Coffee, Sparkles, CheckCircle2, ArrowRight, Info, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription } from './ui/alert';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { supabase } from '../supabase_client';
@@ -16,6 +16,7 @@ interface ScenarioSelectionProps {
   userRole: 'user' | 'therapist';
   userName: string;
   userId: string;
+  onProgressUpdate?: () => void; // 新增：进度更新回调
 }
 
 interface Scenario {
@@ -53,20 +54,36 @@ export function ScenarioSelection({
   onStartJourney, 
   userRole, 
   userName,
-  userId 
+  userId,
+  onProgressUpdate 
 }: ScenarioSelectionProps) {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userProgress, setUserProgress] = useState<{ [key: string]: number }>({});
+  const [refreshing, setRefreshing] = useState(false);
 
-  const completedCount = Object.keys(progress).filter(key => progress[key] > 0).length;
-  const totalScenarios = scenarios.length;
   const isTherapist = userRole === 'therapist';
 
-  // Fetch scenarios from database
+  // 从数据库获取场景数据
   useEffect(() => {
     fetchScenarios();
   }, []);
+
+  // 获取用户进度数据
+  useEffect(() => {
+    if (userId) {
+      fetchUserProgress();
+    }
+  }, [userId]);
+
+  // 监听进度更新
+  useEffect(() => {
+    if (onProgressUpdate) {
+      // 当进度更新时重新获取进度数据
+      fetchUserProgress();
+    }
+  }, [onProgressUpdate]);
 
   const fetchScenarios = async () => {
     try {
@@ -95,9 +112,51 @@ export function ScenarioSelection({
     }
   };
 
+  const fetchUserProgress = async () => {
+    if (!userId) return;
+
+    try {
+      setRefreshing(true);
+      
+      const { data, error } = await supabase
+        .from('scenario_progress')
+        .select('scenario_id, score, completed')
+        .eq('patient_id', userId);
+
+      if (error) {
+        console.error('Error fetching user progress:', error);
+        return;
+      }
+
+      if (data) {
+        const progressMap: { [key: string]: number } = {};
+        data.forEach(item => {
+          // 只记录分数大于0的完成场景
+          if (item.score > 0) {
+            progressMap[item.scenario_id] = item.score;
+          }
+        });
+        setUserProgress(progressMap);
+        console.log('User progress loaded:', progressMap);
+      }
+    } catch (err) {
+      console.error('Error fetching user progress:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefreshProgress = async () => {
+    await fetchUserProgress();
+  };
+
   const getIconComponent = (iconName: string) => {
     return iconMap[iconName as keyof typeof iconMap] || Sparkles;
   };
+
+  // 使用数据库中的进度数据
+  const completedCount = Object.keys(userProgress).filter(key => userProgress[key] > 0).length;
+  const totalScenarios = scenarios.length;
 
   if (loading) {
     return (
@@ -119,9 +178,17 @@ export function ScenarioSelection({
           </div>
           <h2 className="text-xl font-semibold mb-2">Failed to load</h2>
           <p className="text-gray-600 mb-4">{error}</p>
-          <Button onClick={fetchScenarios} variant="outline">
-            Try Again
-          </Button>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={fetchScenarios} variant="outline">
+              Try Again
+            </Button>
+            {userId && (
+              <Button onClick={handleRefreshProgress} variant="outline">
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Progress
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -129,6 +196,7 @@ export function ScenarioSelection({
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
+      {/* 顶部标题和进度信息 */}
       <div className="text-center mb-8">
         <h1 className="mb-3 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
           {isTherapist ? 'Scenario Library' : 'Choose Your Story'}
@@ -139,16 +207,33 @@ export function ScenarioSelection({
             : 'Each scenario helps you practice different emotional skills'
           }
         </p>
-        {completedCount > 0 && (
-          <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full">
-            <CheckCircle2 className="w-4 h-4" />
-            <span className="text-sm">
-              {completedCount} of {totalScenarios} completed
-            </span>
-          </div>
-        )}
+        
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          {completedCount > 0 && (
+            <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-full">
+              <CheckCircle2 className="w-4 h-4" />
+              <span className="text-sm">
+                {completedCount} of {totalScenarios} completed
+              </span>
+            </div>
+          )}
+          
+          {userId && (
+            <Button 
+              onClick={handleRefreshProgress} 
+              variant="outline" 
+              size="sm"
+              disabled={refreshing}
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              {refreshing ? 'Refreshing...' : 'Refresh Progress'}
+            </Button>
+          )}
+        </div>
       </div>
 
+      {/* 场景列表 */}
       {scenarios.length === 0 ? (
         <Card className="p-12 text-center border-2 border-dashed">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
@@ -162,7 +247,8 @@ export function ScenarioSelection({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {scenarios.map((scenario) => {
               const Icon = getIconComponent(scenario.icon_name);
-              const completionScore = progress[scenario.id];
+              // 使用数据库中的进度数据，而不是本地props
+              const completionScore = userProgress[scenario.id];
               const isCompleted = completionScore !== undefined && completionScore > 0;
               
               return (
@@ -199,7 +285,7 @@ export function ScenarioSelection({
                   
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-3">
-                      <h3 className="flex-1">{scenario.title}</h3>
+                      <h3 className="flex-1 text-lg font-semibold">{scenario.title}</h3>
                     </div>
 
                     <p className="text-gray-600 text-sm mb-4 leading-relaxed">
@@ -252,17 +338,18 @@ export function ScenarioSelection({
             })}
           </div>
 
+          {/* 治疗师专用工具区域 */}
           {isTherapist && (
             <Card className="p-8 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-100">
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-12 h-12 rounded-full bg-purple-600 flex items-center justify-center">
                   <Users className="w-6 h-6 text-white" />
                 </div>
-                <h2>Therapist Tools & Resources</h2>
+                <h2 className="text-2xl font-bold">Therapist Tools & Resources</h2>
               </div>
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="bg-white p-5 rounded-lg shadow-sm">
-                  <h4 className="mb-2 flex items-center gap-2">
+                  <h4 className="mb-2 flex items-center gap-2 font-semibold">
                     <CheckCircle2 className="w-5 h-5 text-purple-600" />
                     Track Progress
                   </h4>
@@ -271,7 +358,7 @@ export function ScenarioSelection({
                   </p>
                 </div>
                 <div className="bg-white p-5 rounded-lg shadow-sm">
-                  <h4 className="mb-2 flex items-center gap-2">
+                  <h4 className="mb-2 flex items-center gap-2 font-semibold">
                     <Sparkles className="w-5 h-5 text-purple-600" />
                     Customizable Scenarios
                   </h4>
@@ -280,7 +367,7 @@ export function ScenarioSelection({
                   </p>
                 </div>
                 <div className="bg-white p-5 rounded-lg shadow-sm">
-                  <h4 className="mb-2 flex items-center gap-2">
+                  <h4 className="mb-2 flex items-center gap-2 font-semibold">
                     <Heart className="w-5 h-5 text-purple-600" />
                     Discussion Points
                   </h4>

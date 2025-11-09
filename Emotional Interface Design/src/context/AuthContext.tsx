@@ -104,6 +104,158 @@ export const AuthContextProvider = ({ children }) => {
         );
     };
 
+    // 治疗师创建患者账户（保持治疗师登录状态）
+    const createPatientAccount = async (patientData) => {
+        try {
+            const { email, password, name, age, notes } = patientData;
+            
+            // 1. 首先检查邮箱是否已存在
+            const { data: existingUser, error: checkError } = await supabase
+                .from('profiles')
+                .select('id, email')
+                .eq('email', email)
+                .single();
+
+            if (existingUser) {
+                throw new Error('该邮箱已被注册');
+            }
+
+            // 2. 创建患者账户
+            const { data: authData, error: signUpError } = await signUpAsUser(
+                email, 
+                password, 
+                { 
+                    name,
+                    age,
+                    notes,
+                    created_by: user.id, // 记录创建者（治疗师ID）
+                    therapist_id: user.id, // 关联的治疗师
+                    created_at: new Date().toISOString()
+                }
+            );
+
+            if (signUpError) throw signUpError;
+
+            // 3. 在 patients 表中创建关联记录（如果需要）
+            if (authData.user) {
+                const { error: patientError } = await supabase
+                    .from('patients')
+                    .insert({
+                        patient_id: authData.user.id,
+                        therapist_id: user.id,
+                        name: name,
+                        email: email,
+                        age: age,
+                        notes: notes,
+                        created_at: new Date().toISOString()
+                    });
+
+                if (patientError) {
+                    console.error('创建患者关联记录失败:', patientError);
+                    // 这里不抛出错误，因为用户账户已经创建成功
+                }
+
+                console.log('患者账户创建成功:', authData.user.id);
+            }
+
+            return { 
+                data: authData, 
+                error: null 
+            };
+        } catch (error) {
+            console.error('创建患者账户失败:', error);
+            return { 
+                data: null, 
+                error: error.message || '创建患者账户失败'
+            };
+        }
+    };
+
+    // 批量创建患者账户
+    const createMultiplePatientAccounts = async (patientsData) => {
+        const results = [];
+        
+        for (const patientData of patientsData) {
+            const result = await createPatientAccount(patientData);
+            results.push({
+                email: patientData.email,
+                ...result
+            });
+        }
+        
+        return results;
+    };
+
+    // 获取当前治疗师的所有患者
+    const getTherapistPatients = async () => {
+        try {
+            if (!user || !isTherapist) {
+                throw new Error('只有治疗师可以查看患者列表');
+            }
+
+            const { data, error } = await supabase
+                .from('patients')
+                .select(`
+                    *,
+                    profiles:patient_id (name, email, user_metadata)
+                `)
+                .eq('therapist_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 更新患者信息
+    const updatePatientInfo = async (patientId, updates) => {
+        try {
+            if (!user || !isTherapist) {
+                throw new Error('只有治疗师可以更新患者信息');
+            }
+
+            // 验证治疗师是否有权限更新这个患者
+            const { data: patient, error: checkError } = await supabase
+                .from('patients')
+                .select('therapist_id')
+                .eq('patient_id', patientId)
+                .single();
+
+            if (checkError) throw checkError;
+            if (patient.therapist_id !== user.id) {
+                throw new Error('无权更新此患者信息');
+            }
+
+            const { data, error } = await supabase
+                .from('patients')
+                .update(updates)
+                .eq('patient_id', patientId);
+
+            if (error) throw error;
+
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 重置患者密码（需要 Supabase 管理员权限或使用 email reset）
+    const resetPatientPassword = async (patientEmail) => {
+        try {
+            const { data, error } = await supabase.auth.resetPasswordForEmail(patientEmail, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+
+            if (error) throw error;
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
     // 更新用户角色（管理员功能）
     const updateUserRole = async (newRole) => {
         try {
@@ -146,6 +298,12 @@ export const AuthContextProvider = ({ children }) => {
         signUpAsTherapist, // 治疗师注册
         signOut,
         updateUserRole,
+        // 治疗师患者管理功能
+        createPatientAccount,
+        createMultiplePatientAccounts,
+        getTherapistPatients,
+        updatePatientInfo,
+        resetPatientPassword,
         isAuthenticated: !!session,
         // 角色检查助手函数
         isTherapist: user?.user_metadata?.role === ALLOWED_ROLES.THERAPIST,
