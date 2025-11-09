@@ -20,24 +20,19 @@ function AppContent() {
   const [userProgress, setUserProgress] = useState<{ [key: string]: number }>({});
   const [showWelcome, setShowWelcome] = useState(true);
 
-  // 添加缺失的状态变量
   const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
   const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
 
-  // 添加缺失的函数
   const handleScenarioComplete = (scenarioId: string, score: number) => {
     console.log(`Scenario ${scenarioId} completed with score: ${score}`);
-    // 更新用户进度
     setUserProgress(prev => ({
       ...prev,
       [scenarioId]: score
     }));
-    // 返回场景选择页面
     setSelectedScenario(null);
     setCurrentView('scenarios');
   };
 
-  // 纯页面跳转函数
   const navigateToLogin = () => setCurrentView('login');
   const navigateToWelcome = () => setCurrentView('welcome');
   const navigateToCaregiverSpace = () => setCurrentView('caregiver-space');
@@ -47,7 +42,6 @@ function AppContent() {
     setCurrentView('story');
   };
 
-  // 返回函数
   const backToMenu = () => {
     setSelectedScenario(null);
     setCurrentView('scenarios');
@@ -63,7 +57,6 @@ function AppContent() {
     navigateToWelcome();
   };
 
-  // 处理导航到治疗师空间的函数
   const handleNavigateToCaregiverSpace = () => {
     if (!user) {
       console.log('用户未登录，跳转到登录页面');
@@ -81,30 +74,25 @@ function AppContent() {
     navigateToCaregiverSpace();
   };
 
-  // 处理用户选择（从治疗师空间）
   const handleSelectUser = (userId: string, userName: string) => {
     console.log('选择用户:', userId, userName);
     setSelectedUserId(userId);
     setSelectedUserName(userName);
-    // 同时设置当前患者信息
     setCurrentPatientId(userId);
     setCurrentPatientName(userName);
     setShowWelcome(true);
     navigateToScenarios();
   };
 
-  // 处理开始旅程（隐藏欢迎页面）
   const handleStartJourney = () => {
     setShowWelcome(false);
   };
 
-  // 处理场景选择
   const handleSelectScenario = (scenarioId: string) => {
     console.log('选择场景:', scenarioId);
     navigateToStory(scenarioId);
   };
 
-  // 模拟获取用户进度数据
   useEffect(() => {
     const mockProgress = {
       'family-conflict': 85,
@@ -113,7 +101,24 @@ function AppContent() {
     setUserProgress(mockProgress);
   }, [selectedUserId]);
 
-  // 显示加载状态
+  // ✅ 新增逻辑：刷新后根据用户状态自动跳转
+  useEffect(() => {
+    if (loading) return; // 等待加载完成再判断
+    if (!user) {
+      setCurrentView('login');
+      return;
+    }
+
+    // 如果用户已登录，根据角色跳转
+    if (isTherapist) {
+      console.log('已登录治疗师，跳转到治疗师空间');
+      setCurrentView('caregiver-space');
+    } else {
+      console.log('已登录普通用户，跳转到欢迎页');
+      setCurrentView('welcome');
+    }
+  }, [user, isTherapist, loading]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
@@ -127,7 +132,6 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* 返回首页按钮 */}
       {(currentView === 'scenarios' || currentView === 'story') && (
         <div className="absolute top-4 left-4 z-10">
           <Button 
@@ -141,7 +145,6 @@ function AppContent() {
         </div>
       )}
       
-      {/* 页面路由 */}
       {currentView === 'login' && (
         <Login onLogin={handleLogin} />
       )}
@@ -177,8 +180,8 @@ function AppContent() {
           scenarioId={selectedScenario}
           onComplete={handleScenarioComplete}
           onBack={backToMenu}
-          patientId={currentPatientId || selectedUserId || user?.id} // 修复：使用正确的患者ID
-          patientName={currentPatientName || selectedUserName || user?.user_metadata?.name} // 修复：使用正确的患者姓名
+          patientId={currentPatientId || selectedUserId || user?.id}
+          patientName={currentPatientName || selectedUserName || user?.user_metadata?.name}
         />
       )}
 
