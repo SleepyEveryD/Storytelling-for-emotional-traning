@@ -4,16 +4,19 @@ import { Button } from './ui/button';
 import { Progress } from './ui/progress';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
-import { ArrowLeft, CheckCircle2, XCircle, Lightbulb, BookOpen, Heart, ArrowRight, Trophy } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { ArrowLeft, CheckCircle2, Lightbulb, BookOpen, Heart, ArrowRight, Trophy } from 'lucide-react';
+import { toast } from 'sonner';
 import { scenarioData } from './scenarios/scenarioData';
 import { EmotionWheel } from './EmotionWheel';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { supabase } from '../supabase_client';
 
 interface StoryViewerProps {
   scenarioId: string;
   onComplete: (scenarioId: string, score: number) => void;
   onBack: () => void;
+  patientId?: string;
+  patientName?: string;
 }
 
 interface Choice {
@@ -35,7 +38,7 @@ interface StorySegment {
   imageUrl?: string;
 }
 
-export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps) {
+export function StoryViewer({ scenarioId, onComplete, onBack, patientId, patientName }: StoryViewerProps) {
   const scenario = scenarioData[scenarioId];
   const [currentSegment, setCurrentSegment] = useState(0);
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
@@ -44,15 +47,105 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
   const [correctAnswers, setCorrectAnswers] = useState(0);
   const [totalQuestions, setTotalQuestions] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  const [isSavingProgress, setIsSavingProgress] = useState(false);
 
   if (!scenario) {
-    return <div>Scenario not found</div>;
+    return (
+      <div className="container mx-auto px-4 py-12 max-w-3xl">
+        <Card className="p-8 text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Lightbulb className="w-8 h-8 text-red-600" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Scenario Not Found</h2>
+          <p className="text-gray-600 mb-4">The requested scenario could not be found.</p>
+          <Button onClick={onBack} variant="outline">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Scenarios
+          </Button>
+        </Card>
+      </div>
+    );
   }
+
+  // 保存进度到数据库
+  const saveProgressToDatabase = async (score: number, completed: boolean = true) => {
+    if (!patientId) {
+      console.log('No patient ID provided, skipping database save');
+      return;
+    }
+
+    try {
+      setIsSavingProgress(true);
+      
+      // 首先检查是否已有进度记录
+      const { data: existingProgress, error: checkError } = await supabase
+        .from('scenario_progress')
+        .select('*')
+        .eq('patient_id', patientId)
+        .eq('scenario_id', scenarioId)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('Error checking existing progress:', checkError);
+      }
+
+      let result;
+      
+      if (existingProgress) {
+        // 更新现有记录
+        result = await supabase
+          .from('scenario_progress')
+          .update({
+            score: Math.max(existingProgress.score || 0, score),
+            completed: completed || existingProgress.completed,
+            last_attempted: new Date().toISOString(),
+            attempts: (existingProgress.attempts || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingProgress.id);
+      } else {
+        // 创建新记录
+        result = await supabase
+          .from('scenario_progress')
+          .insert([
+            {
+              patient_id: patientId,
+              scenario_id: scenarioId,
+              scenario_title: scenario.title,
+              score: score,
+              completed: completed,
+              last_attempted: new Date().toISOString(),
+              attempts: 1
+            }
+          ]);
+      }
+
+      if (result.error) {
+        console.error('Error saving progress to database:', result.error);
+        toast.error('Failed to save progress');
+      } else {
+        console.log('Progress saved successfully');
+      }
+    } catch (error) {
+      console.error('Error saving progress:', error);
+      toast.error('Error saving progress to database');
+    } finally {
+      setIsSavingProgress(false);
+    }
+  };
+
+  // 保存部分进度
+  const savePartialProgress = async () => {
+    if (!patientId || totalQuestions === 0) return;
+
+    const currentScore = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+    await saveProgressToDatabase(currentScore, false);
+  };
 
   const segment: StorySegment = scenario.story[currentSegment];
   const progress = ((currentSegment + 1) / scenario.story.length) * 100;
 
-  const handleEmotionSelect = (emotion: string) => {
+  const handleEmotionSelect = async (emotion: string) => {
     setSelectedEmotion(emotion);
     setShowFeedback(true);
     setTotalQuestions(prev => prev + 1);
@@ -63,9 +156,11 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
     } else {
       toast.error(`Not quite. The emotion was ${segment.correctEmotion}.`);
     }
+
+    await savePartialProgress();
   };
 
-  const handleChoiceSelect = (choice: Choice) => {
+  const handleChoiceSelect = async (choice: Choice) => {
     setSelectedChoice(choice);
     setShowFeedback(true);
     setTotalQuestions(prev => prev + 1);
@@ -76,9 +171,11 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
     } else {
       toast.error('Consider a more constructive approach.');
     }
+
+    await savePartialProgress();
   };
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
     if (currentSegment < scenario.story.length - 1) {
       setCurrentSegment(prev => prev + 1);
       setSelectedEmotion(null);
@@ -87,13 +184,30 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
     } else {
       const finalScore = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
       setIsComplete(true);
-      onComplete(scenarioId, finalScore);
+      
+      // 只保存进度，不触发跳转
+      await saveProgressToDatabase(finalScore, true);
+      
+      console.log('Scenario completed, showing completion screen');
+      // 注意：这里不调用 onComplete，让用户手动点击返回
     }
   };
 
   const handleFinish = () => {
-    onBack();
+    console.log('User clicked back to scenarios');
+    const finalScore = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+    onComplete(scenarioId, finalScore);
     toast.success('Great work! Continue practicing with more scenarios.');
+  };
+
+  const handlePracticeAgain = () => {
+    setCurrentSegment(0);
+    setSelectedEmotion(null);
+    setSelectedChoice(null);
+    setShowFeedback(false);
+    setCorrectAnswers(0);
+    setTotalQuestions(0);
+    setIsComplete(false);
   };
 
   const canContinue = 
@@ -111,27 +225,44 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
             <Trophy className="w-10 h-10 text-white" />
           </div>
           
-          <h1 className="mb-4 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+          <h1 className="text-3xl md:text-4xl font-bold mb-4 bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
             Scenario Complete! 🎉
           </h1>
           
           <p className="text-gray-600 mb-8 text-lg">
-            You've completed <strong>{scenario.title}</strong>
+            {patientName ? (
+              <>
+                <strong>{patientName}</strong> has completed <strong>{scenario.title}</strong>
+              </>
+            ) : (
+              <>
+                You've completed <strong>{scenario.title}</strong>
+              </>
+            )}
           </p>
 
           <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-8 mb-8 border-2 border-green-200">
-            <div className="text-6xl mb-4">{finalScore}%</div>
-            <p className="text-gray-700 mb-2">Recognition Accuracy</p>
+            <div className="text-6xl font-bold mb-4 text-green-700">{finalScore}%</div>
+            <p className="text-gray-700 mb-2 font-medium">Recognition Accuracy</p>
             <p className="text-sm text-gray-600">
-              You answered {correctAnswers} out of {totalQuestions} questions correctly
+              {correctAnswers} out of {totalQuestions} questions answered correctly
             </p>
           </div>
+
+          {isSavingProgress && (
+            <Alert className="bg-blue-50 border-blue-200 mb-4">
+              <AlertDescription className="text-blue-700 flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                Saving progress to database...
+              </AlertDescription>
+            </Alert>
+          )}
 
           <Alert className="bg-blue-50 border-blue-200 mb-8 text-left">
             <Heart className="h-5 w-5 text-blue-600" />
             <AlertDescription>
               <strong>Remember:</strong> Emotional intelligence is a journey, not a destination. 
-              Each practice session helps you build stronger emotional awareness and regulation skills.
+              Each practice session helps build stronger emotional awareness and regulation skills.
             </AlertDescription>
           </Alert>
 
@@ -140,23 +271,17 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
               onClick={handleFinish}
               size="lg"
               className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+              disabled={isSavingProgress}
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
               Back to Scenarios
             </Button>
             <Button 
-              onClick={() => {
-                setCurrentSegment(0);
-                setSelectedEmotion(null);
-                setSelectedChoice(null);
-                setShowFeedback(false);
-                setCorrectAnswers(0);
-                setTotalQuestions(0);
-                setIsComplete(false);
-              }}
+              onClick={handlePracticeAgain}
               size="lg"
               variant="outline"
               className="flex-1"
+              disabled={isSavingProgress}
             >
               Practice Again
             </Button>
@@ -174,6 +299,11 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
           Back
         </Button>
         <div className="flex items-center gap-3">
+          {patientName && (
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+              Patient: {patientName}
+            </Badge>
+          )}
           <Badge variant="outline" className="gap-1">
             <BookOpen className="w-3 h-3" />
             {currentSegment + 1} of {scenario.story.length}
@@ -234,8 +364,8 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
           {segment.emotionRecognitionQuestion && (
             <div className="mt-8">
               <div className="mb-6 p-4 bg-purple-50 rounded-lg border-2 border-purple-200">
-                <h3 className="text-purple-900">{segment.emotionRecognitionQuestion}</h3>
-                <p className="text-sm text-purple-700 mt-2">Select the emotion you think best matches:</p>
+                <h3 className="text-lg font-semibold text-purple-900 mb-2">{segment.emotionRecognitionQuestion}</h3>
+                <p className="text-sm text-purple-700">Select the emotion you think best matches:</p>
               </div>
               
               <div className="mb-6">
@@ -278,8 +408,8 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
           {segment.choices && (
             <div className="mt-8">
               <div className="mb-6 p-4 bg-purple-50 rounded-lg border-2 border-purple-200">
-                <h3 className="text-purple-900">How would you respond?</h3>
-                <p className="text-sm text-purple-700 mt-2">Consider how each response might affect the situation:</p>
+                <h3 className="text-lg font-semibold text-purple-900 mb-2">How would you respond?</h3>
+                <p className="text-sm text-purple-700">Consider how each response might affect the situation:</p>
               </div>
               <div className="space-y-4">
                 {segment.choices.map((choice, index) => (
@@ -295,7 +425,7 @@ export function StoryViewer({ scenarioId, onComplete, onBack }: StoryViewerProps
                         : 'border-gray-200 bg-white hover:border-purple-300 hover:shadow-md hover:scale-[1.01]'
                     } ${showFeedback ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
-                    <p className="mb-2 leading-relaxed">{choice.text}</p>
+                    <p className="mb-2 leading-relaxed text-gray-800">{choice.text}</p>
                     <p className="text-sm text-gray-600">
                       <em>Emotional response: {choice.emotionalResponse}</em>
                     </p>
