@@ -48,31 +48,31 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
   const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
   const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
 
-  // 治疗师身份验证和保护
+  // Therapist authentication and protection
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        console.log('用户未登录，无法访问治疗师空间');
+        console.log('User not logged in, cannot access therapist space');
         return;
       } else if (!isTherapist) {
-        console.log('用户不是治疗师，无法访问治疗师空间');
+        console.log('User is not a therapist, cannot access therapist space');
         return;
       } else {
-        // 如果是治疗师，加载患者数据
+        // If user is therapist, load patient data
         fetchPatients();
       }
     }
   }, [user, isTherapist, loading]);
 
-  // 从 Supabase 获取患者数据
+  // Fetch patient data from Supabase
   const fetchPatients = async () => {
     if (!user) return;
     
     try {
       setIsLoading(true);
-      console.log('开始获取患者数据...');
+      console.log('Starting to fetch patient data...');
       
-      // 获取治疗师的患者（包含所有字段）
+      // Get therapist's patients (including all fields)
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
         .select('*')
@@ -81,11 +81,11 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
         .order('created_at', { ascending: false });
 
       if (patientsError) {
-        console.error('获取患者数据错误:', patientsError);
+        console.error('Error fetching patient data:', patientsError);
         return;
       }
 
-      console.log('获取到的患者数据:', patientsData);
+      console.log('Fetched patient data:', patientsData);
 
       if (!patientsData || patientsData.length === 0) {
         setUsers([]);
@@ -93,12 +93,12 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
         return;
       }
 
-      // 为每个患者获取进度数据
+      // Get progress data for each patient
       const patientsWithProgress = await Promise.all(
         patientsData.map(async (patient) => {
-          console.log(`处理患者 ${patient.name} 的进度数据...`);
+          console.log(`Processing progress data for patient ${patient.name}...`);
           
-          // 获取患者完成的场景数量
+          // Get number of completed scenarios for patient
           const { data: progressData, error: progressError } = await supabase
             .from('scenario_progress')
             .select('scenario_id, completed, last_attempted')
@@ -106,25 +106,25 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
             .eq('completed', true);
 
           if (progressError) {
-            console.error(`获取患者 ${patient.name} 进度数据错误:`, progressError);
+            console.error(`Error fetching progress data for patient ${patient.name}:`, progressError);
           }
 
-          // 获取总场景数量
+          // Get total number of scenarios
           const { data: scenariosData, error: scenariosError } = await supabase
             .from('scenarios')
             .select('id');
 
           if (scenariosError) {
-            console.error('获取场景数据错误:', scenariosError);
+            console.error('Error fetching scenario data:', scenariosError);
           }
 
           const completedScenarios = progressData?.length || 0;
           const totalScenarios = scenariosData?.length || 6;
 
-          // 获取最后活动时间
+          // Get last activity time
           let lastActive = patient.created_at;
           if (progressData && progressData.length > 0) {
-            // 找到最新的活动时间
+            // Find the most recent activity time
             const latestAttempt = progressData.reduce((latest, current) => {
               if (!current.last_attempted) return latest;
               return new Date(current.last_attempted) > new Date(latest) ? current.last_attempted : latest;
@@ -132,7 +132,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
             lastActive = latestAttempt;
           }
 
-          console.log(`患者 ${patient.name} 完成场景: ${completedScenarios}/${totalScenarios}`);
+          console.log(`Patient ${patient.name} completed scenarios: ${completedScenarios}/${totalScenarios}`);
 
           return {
             id: patient.id,
@@ -151,16 +151,16 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
         })
       );
 
-      console.log('最终的患者数据:', patientsWithProgress);
+      console.log('Final patient data:', patientsWithProgress);
       setUsers(patientsWithProgress);
     } catch (error) {
-      console.error('获取数据时发生错误:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // 创建新患者
+  // Create new patient
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserName.trim() || !user) return;
@@ -180,34 +180,34 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
         .select();
 
       if (error) {
-        console.error('创建患者错误:', error);
-        alert('创建患者失败: ' + error.message);
+        console.error('Error creating patient:', error);
+        alert('Failed to create patient: ' + error.message);
         return;
       }
 
       if (data && data.length > 0) {
         const newPatient = data[0];
         
-        // 重新获取数据以确保显示最新状态
+        // Refetch data to ensure latest state is displayed
         await fetchPatients();
         
         setNewUserName('');
         setIsDialogOpen(false);
-        console.log('成功创建患者:', newPatient);
+        console.log('Successfully created patient:', newPatient);
       }
     } catch (error) {
-      console.error('创建患者时发生错误:', error);
-      alert('创建患者时发生错误');
+      console.error('Error creating patient:', error);
+      alert('Error creating patient');
     } finally {
       setIsCreating(false);
     }
   };
 
-  // 处理选择患者
+  // Handle patient selection
   const handleSelectUser = (userId: string, userName: string) => {
     setCurrentPatientId(userId);
     setCurrentPatientName(userName);
-    // 调用父组件的回调函数，传递患者信息
+    // Call parent component callback with patient information
     onSelectUser(userId, userName, userId, userName);
   };
 
@@ -226,25 +226,25 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays === 0) return '今天';
-    if (diffDays === 1) return '昨天';
-    if (diffDays < 7) return `${diffDays} 天前`;
-    return date.toLocaleDateString('zh-CN');
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString('en-US');
   };
 
-  // 显示加载状态
+  // Show loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">检查治疗师权限中...</p>
+          <p className="text-gray-600">Checking therapist permissions...</p>
         </div>
       </div>
     );
   }
 
-  // 如果未通过验证，显示无权限信息
+  // Show unauthorized message if not authenticated
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
@@ -252,10 +252,10 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Shield className="w-8 h-8 text-red-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">未登录</h1>
-          <p className="text-gray-600 mb-6">请先登录以访问治疗师空间</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Not Logged In</h1>
+          <p className="text-gray-600 mb-6">Please log in to access therapist space</p>
           <Button onClick={onBack} variant="outline">
-            返回首页
+            Back to Home
           </Button>
         </div>
       </div>
@@ -269,18 +269,18 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
           <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Shield className="w-8 h-8 text-orange-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">无权限访问</h1>
-          <p className="text-gray-600 mb-2">您没有治疗师权限</p>
-          <p className="text-gray-500 text-sm mb-6">当前角色: {user.user_metadata?.role || 'user'}</p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-2">You do not have therapist permissions</p>
+          <p className="text-gray-500 text-sm mb-6">Current role: {user.user_metadata?.role || 'user'}</p>
           <Button onClick={onBack} variant="outline">
-            返回首页
+            Back to Home
           </Button>
         </div>
       </div>
     );
   }
 
-  // 数据加载状态
+  // Data loading state
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
@@ -292,15 +292,15 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
               className="mb-6 gap-2"
             >
               <ArrowLeft className="w-4 h-4" />
-              返回首页
+              Back to Home
             </Button>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-              治疗师工作台
+              Therapist Dashboard
             </h1>
           </div>
           <div className="text-center py-12">
             <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-gray-600">加载患者数据中...</p>
+            <p className="text-gray-600">Loading patient data...</p>
           </div>
         </div>
       </div>
@@ -318,51 +318,51 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
             className="mb-6 gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            返回首页
+            Back to Home
           </Button>
 
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  治疗师工作台
+                  Therapist Dashboard
                 </h1>
                 <Badge className="bg-purple-100 text-purple-800 border-purple-200 gap-1">
                   <Shield className="w-3 h-3" />
-                  治疗师模式
+                  Therapist Mode
                 </Badge>
               </div>
               <div className="flex items-center gap-2 text-gray-600">
-                <span>欢迎，</span>
+                <span>Welcome,</span>
                 <span className="font-semibold text-purple-600">
-                  {user.user_metadata?.name || user.user_metadata?.full_name || '治疗师'}
+                  {user.user_metadata?.name || user.user_metadata?.full_name || 'Therapist'}
                 </span>
-                <span>医生！</span>
+                <span>!</span>
               </div>
               <p className="text-gray-600 mt-1">
-                管理儿童会话并跟踪他们的进度
+                Manage patient sessions and track their progress
               </p>
             </div>
 
-            {/* 创建新会话对话框 */}
+            {/* Create New Session Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700">
                   <UserPlus className="w-5 h-5" />
-                  创建新会话
+                  Create New Session
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>创建新会话</DialogTitle>
+                  <DialogTitle>Create New Session</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
                   <div>
-                    <Label htmlFor="userName">儿童姓名</Label>
+                    <Label htmlFor="userName">Patient Name</Label>
                     <Input
                       id="userName"
                       type="text"
-                      placeholder="请输入儿童姓名"
+                      placeholder="Enter patient name"
                       value={newUserName}
                       onChange={(e) => setNewUserName(e.target.value)}
                       className="mt-2"
@@ -374,7 +374,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                     className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
                     disabled={!newUserName.trim() || isCreating}
                   >
-                    {isCreating ? '创建中...' : '创建会话'}
+                    {isCreating ? 'Creating...' : 'Create Session'}
                   </Button>
                 </form>
               </DialogContent>
@@ -391,7 +391,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900">{users.length}</p>
-                <p className="text-sm text-gray-600">活跃会话</p>
+                <p className="text-sm text-gray-600">Active Sessions</p>
               </div>
             </div>
           </Card>
@@ -405,7 +405,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                 <p className="text-2xl font-bold text-gray-900">
                   {users.reduce((sum, user) => sum + user.completedScenarios, 0)}
                 </p>
-                <p className="text-sm text-gray-600">总完成数</p>
+                <p className="text-sm text-gray-600">Total Completed</p>
               </div>
             </div>
           </Card>
@@ -425,7 +425,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       )
                     : 0}%
                 </p>
-                <p className="text-sm text-gray-600">平均进度</p>
+                <p className="text-sm text-gray-600">Average Progress</p>
               </div>
             </div>
           </Card>
@@ -433,23 +433,23 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
 
         {/* Session Cards */}
         <div>
-          <h2 className="text-2xl font-semibold mb-6 text-gray-900">会话管理</h2>
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900">Session Management</h2>
           
           {users.length === 0 ? (
             <Card className="p-12 text-center border-2 border-dashed hover:shadow-md transition-shadow">
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
                 <User className="w-8 h-8 text-gray-400" />
               </div>
-              <h3 className="text-xl font-semibold mb-2 text-gray-600">暂无会话</h3>
+              <h3 className="text-xl font-semibold mb-2 text-gray-600">No Sessions Yet</h3>
               <p className="text-gray-500 mb-6">
-                创建第一个会话来开始管理
+                Create your first session to start managing patients
               </p>
               <Button 
                 onClick={() => setIsDialogOpen(true)}
                 className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               >
                 <UserPlus className="w-5 h-5" />
-                创建第一个会话
+                Create First Session
               </Button>
             </Card>
           ) : (
@@ -477,7 +477,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between mb-2">
                           <h3 className="text-xl font-semibold text-gray-900">{user.name}</h3>
-                          {/* 额外信息 */}
+                          {/* Additional Information */}
                           {(user.age || user.gender) && (
                             <div className="flex items-center gap-2 text-sm text-gray-500">
                               {user.age && <span>{user.age} years</span>}
@@ -489,11 +489,11 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                         <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
                           <div className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
-                            <span>最后活动: {formatDate(user.lastActive)}</span>
+                            <span>Last Active: {formatDate(user.lastActive)}</span>
                           </div>
                           <div className="flex items-center gap-1">
                             <User className="w-4 h-4" />
-                            <span>创建时间: {formatDate(user.createdDate)}</span>
+                            <span>Created: {formatDate(user.createdDate)}</span>
                           </div>
                         </div>
 
@@ -501,7 +501,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                         <div className="flex items-center gap-4">
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-2">
-                              <span className="text-sm text-gray-600">进度</span>
+                              <span className="text-sm text-gray-600">Progress</span>
                               <span className="text-sm font-medium">{progressPercentage}%</span>
                             </div>
                             <div className="w-full bg-gray-200 rounded-full h-3">
@@ -512,7 +512,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                             </div>
                           </div>
                           <Badge variant="outline" className="flex-shrink-0">
-                            {user.completedScenarios}/{user.totalScenarios} 个场景
+                            {user.completedScenarios}/{user.totalScenarios} scenarios
                           </Badge>
                         </div>
                       </div>
@@ -522,7 +522,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                         <div className="flex-shrink-0">
                           <Badge className="bg-green-100 text-green-800 border-green-200 gap-1">
                             <CheckCircle2 className="w-4 h-4" />
-                            已完成
+                            Completed
                           </Badge>
                         </div>
                       )}
@@ -534,17 +534,17 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
           )}
         </div>
 
-        {/* 当前选择的患者信息 */}
+        {/* Currently Selected Patient Information */}
         {currentPatientId && (
           <div className="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="flex items-center gap-3">
               <User className="w-5 h-5 text-blue-600" />
               <span className="text-blue-800 font-medium">
-                当前选择患者: {currentPatientName}
+                Currently Selected Patient: {currentPatientName}
               </span>
             </div>
             <p className="text-blue-600 text-sm mt-1">
-              现在选择场景，患者的进度将被记录到数据库中
+              Now select scenarios, patient progress will be recorded in the database
             </p>
           </div>
         )}

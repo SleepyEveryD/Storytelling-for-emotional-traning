@@ -27,7 +27,7 @@ interface Scenario {
   emotions: string[];
   icon_name: string;
   color: string;
-  image_url: string;
+  image_url: string; 
 }
 
 // Icon mapping
