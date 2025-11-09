@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Sparkles, User, Stethoscope, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Sparkles, User, Stethoscope, Mail, Lock, Eye, EyeOff, ArrowLeft, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginProps {
@@ -17,9 +17,10 @@ export function Login({ onLogin }: LoginProps) {
     signIn, 
     signUpAsUser, 
     signUpAsTherapist, 
-    userRole, 
-    isTherapist, 
-    isUser,
+    user,
+    loading: authLoading,
+    isAuthenticated,
+    signOut,
     ALLOWED_ROLES 
   } = useAuth();
   
@@ -32,6 +33,39 @@ export function Login({ onLogin }: LoginProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showLoggedInScreen, setShowLoggedInScreen] = useState(false);
+
+  // 检查用户是否已经有有效的会话
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && user) {
+      setShowLoggedInScreen(true);
+    }
+  }, [authLoading, isAuthenticated, user]);
+
+  // 处理继续登录（使用已保存的会话）
+  const handleContinueLogin = () => {
+    if (user) {
+      const userMetadata = user.user_metadata;
+      const userRoleFromMeta = userMetadata?.role || ALLOWED_ROLES.USER;
+      const userName = userMetadata?.name || userMetadata?.full_name || 'User';
+      
+      const finalRole: 'user' | 'therapist' = 
+        userRoleFromMeta === ALLOWED_ROLES.THERAPIST ? 'therapist' : 'user';
+      
+      onLogin(finalRole, userName, user.id);
+    }
+  };
+
+  // 处理登出
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      setShowLoggedInScreen(false);
+      resetForm();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   // 重置表单状态
   const resetForm = () => {
@@ -41,6 +75,8 @@ export function Login({ onLogin }: LoginProps) {
     setConfirmPassword('');
     setError('');
     setLoading(false);
+    setSelectedRole(null);
+    setAuthMode('select-role');
   };
 
   // 处理角色选择
@@ -74,31 +110,31 @@ export function Login({ onLogin }: LoginProps) {
 
     if (authMode === 'register') {
       if (password !== confirmPassword) {
-        setError('密码不匹配');
+        setError('Passwords do not match');
         return false;
       }
       if (password.length < 6) {
-        setError('密码至少需要6位字符');
+        setError('Password must be at least 6 characters');
         return false;
       }
       if (!name.trim()) {
-        setError('请输入您的姓名');
+        setError('Please enter your name');
         return false;
       }
     }
     
     if (!email.trim()) {
-      setError('请输入邮箱地址');
+      setError('Please enter email address');
       return false;
     }
 
     if (!password.trim()) {
-      setError('请输入密码');
+      setError('Please enter password');
       return false;
     }
 
     if (!selectedRole) {
-      setError('请选择角色');
+      setError('Please select a role');
       return false;
     }
 
@@ -144,7 +180,7 @@ export function Login({ onLogin }: LoginProps) {
         onLogin(selectedRole, name.trim(), result.data.user.id);
       }
     } catch (err: any) {
-      setError(err.message || '注册失败，请重试');
+      setError(err.message || 'Registration failed, please try again');
     } finally {
       setLoading(false);
     }
@@ -167,7 +203,7 @@ export function Login({ onLogin }: LoginProps) {
         // 从用户元数据中获取角色和姓名
         const userMetadata = result.data.user.user_metadata;
         const userRoleFromMeta = userMetadata?.role || ALLOWED_ROLES.USER;
-        const userName = userMetadata?.name || userMetadata?.full_name || '用户';
+        const userName = userMetadata?.name || userMetadata?.full_name || 'User';
         
         // 确保角色是 'user' 或 'therapist'
         const finalRole: 'user' | 'therapist' = 
@@ -177,11 +213,93 @@ export function Login({ onLogin }: LoginProps) {
         onLogin(finalRole, userName, result.data.user.id);
       }
     } catch (err: any) {
-      setError(err.message || '登录失败，请检查您的凭据');
+      setError(err.message || 'Login failed, please check your credentials');
     } finally {
       setLoading(false);
     }
   };
+
+  // 显示加载状态
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-6">
+            <Sparkles className="w-10 h-10 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            Checking authentication...
+          </h1>
+          <div className="flex justify-center">
+            <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 显示已登录界面（让用户选择继续或登出）
+  if (showLoggedInScreen && user) {
+    const userMetadata = user.user_metadata;
+    const userRoleFromMeta = userMetadata?.role || ALLOWED_ROLES.USER;
+    const userName = userMetadata?.name || userMetadata?.full_name || 'User';
+    const userRole = userRoleFromMeta === ALLOWED_ROLES.THERAPIST ? 'Therapist' : 'User';
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-6">
+              <Sparkles className="w-10 h-10 text-white" />
+            </div>
+            <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Welcome Back!
+            </h1>
+            <p className="text-gray-600 mb-6">
+              You're already logged in as {userName}
+            </p>
+          </div>
+
+          <Card className="p-6 border-2 shadow-lg backdrop-blur-sm bg-white/90">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mx-auto mb-4">
+                <User className="w-8 h-8 text-purple-600" />
+              </div>
+              <h2 className="text-xl font-semibold mb-1">{userName}</h2>
+              <p className="text-gray-600 text-sm mb-4">{userRole}</p>
+              <p className="text-gray-500 text-sm">{user.email}</p>
+            </div>
+
+            <div className="space-y-4">
+              <Button 
+                onClick={handleContinueLogin}
+                size="lg"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 transition-all duration-300"
+              >
+                Continue as {userName}
+              </Button>
+
+              <Button 
+                onClick={handleLogout}
+                variant="outline"
+                size="lg"
+                className="w-full gap-2 text-gray-600 hover:text-gray-700 border-gray-300 hover:border-gray-400"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
+            </div>
+
+            <div className="mt-6 text-center">
+              <p className="text-xs text-gray-500">
+                Not {userName}? Sign out to use a different account.
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // 角色选择界面
   if (authMode === 'select-role') {
@@ -193,10 +311,10 @@ export function Login({ onLogin }: LoginProps) {
               <Sparkles className="w-10 h-10 text-white" />
             </div>
             <h1 className="text-4xl font-bold mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              欢迎来到情感训练平台
+              Welcome to Emotional Training Platform
             </h1>
             <p className="text-gray-600 max-w-2xl mx-auto text-lg">
-              请选择您的角色继续
+              Please select your role to continue
             </p>
           </div>
 
@@ -209,9 +327,9 @@ export function Login({ onLogin }: LoginProps) {
                 <div className="w-20 h-20 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
                   <User className="w-10 h-10 text-purple-600" />
                 </div>
-                <h2 className="text-xl font-semibold mb-2">我是用户</h2>
+                <h2 className="text-xl font-semibold mb-2">I am a User</h2>
                 <p className="text-gray-600">
-                  通过互动故事练习情感识别和调节能力
+                  Practice emotion recognition and regulation through interactive stories
                 </p>
               </div>
             </button>
@@ -224,9 +342,9 @@ export function Login({ onLogin }: LoginProps) {
                 <div className="w-20 h-20 rounded-full bg-purple-100 flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors">
                   <Stethoscope className="w-10 h-10 text-purple-600" />
                 </div>
-                <h2 className="text-xl font-semibold mb-2">我是治疗师/护理人员</h2>
+                <h2 className="text-xl font-semibold mb-2">I am a Therapist/Caregiver</h2>
                 <p className="text-gray-600">
-                  监控进度、定制场景并支持患者的情感成长
+                  Monitor progress, customize scenarios, and support emotional growth
                 </p>
               </div>
             </button>
@@ -248,12 +366,12 @@ export function Login({ onLogin }: LoginProps) {
             <Sparkles className="w-6 h-6 text-purple-600 group-hover:scale-110 transition-transform" />
           </button>
           <h1 className="text-3xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            {authMode === 'register' ? '创建账户' : '欢迎回来'}
+            {authMode === 'register' ? 'Create Account' : 'Welcome Back'}
           </h1>
           <p className="text-gray-600">
             {authMode === 'register' 
-              ? `注册为 ${selectedRole === ALLOWED_ROLES.USER ? '用户' : '治疗师'}`
-              : `登录为 ${selectedRole === ALLOWED_ROLES.USER ? '用户' : '治疗师'}`
+              ? `Register as ${selectedRole === ALLOWED_ROLES.USER ? 'User' : 'Therapist'}`
+              : `Login as ${selectedRole === ALLOWED_ROLES.USER ? 'User' : 'Therapist'}`
             }
           </p>
         </div>
@@ -269,7 +387,7 @@ export function Login({ onLogin }: LoginProps) {
               className="w-full gap-2 text-gray-600 hover:text-gray-700 border-gray-300 hover:border-gray-400"
             >
               <ArrowLeft className="w-4 h-4" />
-              更改角色 ({selectedRole === ALLOWED_ROLES.USER ? '用户' : '治疗师'})
+              Change Role ({selectedRole === ALLOWED_ROLES.USER ? 'User' : 'Therapist'})
             </Button>
           </div>
 
@@ -282,89 +400,91 @@ export function Login({ onLogin }: LoginProps) {
 
             {authMode === 'register' && (
               <div className="mb-4">
-                <Label htmlFor="name" className="mb-2 block text-sm font-medium text-gray-700">
-                  姓名
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="请输入您的姓名"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="pl-10 focus:border-purple-500 transition-colors"
-                    required
-                  />
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <div className="flex items-center mb-2">
+                  <User className="w-4 h-4 text-gray-400 mr-2" />
+                  <Label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                    Full Name
+                  </Label>
                 </div>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="focus:border-purple-500 transition-colors"
+                  required
+                />
               </div>
             )}
 
             <div className="mb-4">
-              <Label htmlFor="email" className="mb-2 block text-sm font-medium text-gray-700">
-                邮箱地址
-              </Label>
-              <div className="relative">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="请输入您的邮箱"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10 focus:border-purple-500 transition-colors"
-                  required
-                />
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <div className="flex items-center mb-2">
+                <Mail className="w-4 h-4 text-gray-400 mr-2" />
+                <Label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                  Email Address
+                </Label>
               </div>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="focus:border-purple-500 transition-colors"
+                required
+              />
             </div>
 
             <div className="mb-4">
-              <Label htmlFor="password" className="mb-2 block text-sm font-medium text-gray-700">
-                密码
-              </Label>
+              <div className="flex items-center mb-2">
+                <Lock className="w-4 h-4 text-gray-400 mr-2" />
+                <Label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                  Password
+                </Label>
+              </div>
               <div className="relative">
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="请输入密码"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10 focus:border-purple-500 transition-colors"
+                  className="pr-10 focus:border-purple-500 transition-colors"
                   required
                 />
-                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
               {authMode === 'register' && (
                 <p className="text-xs text-gray-500 mt-1">
-                  密码至少需要6位字符
+                  Password must be at least 6 characters
                 </p>
               )}
             </div>
 
             {authMode === 'register' && (
               <div className="mb-6">
-                <Label htmlFor="confirmPassword" className="mb-2 block text-sm font-medium text-gray-700">
-                  确认密码
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="请再次输入密码"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10 focus:border-purple-500 transition-colors"
-                    required
-                  />
-                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <div className="flex items-center mb-2">
+                  <Lock className="w-4 h-4 text-gray-400 mr-2" />
+                  <Label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                    Confirm Password
+                  </Label>
                 </div>
+                <Input
+                  id="confirmPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="focus:border-purple-500 transition-colors"
+                  required
+                />
               </div>
             )}
 
@@ -377,10 +497,10 @@ export function Login({ onLogin }: LoginProps) {
               {loading ? (
                 <div className="flex items-center gap-2">
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {authMode === 'register' ? '创建账户中...' : '登录中...'}
+                  {authMode === 'register' ? 'Creating Account...' : 'Signing In...'}
                 </div>
               ) : (
-                authMode === 'register' ? '创建账户' : '登录'
+                authMode === 'register' ? 'Create Account' : 'Sign In'
               )}
             </Button>
 
@@ -391,8 +511,8 @@ export function Login({ onLogin }: LoginProps) {
                 className="text-purple-600 hover:text-purple-700 text-sm font-medium transition-colors"
               >
                 {authMode === 'register' 
-                  ? '已有账户？立即登录' 
-                  : '没有账户？立即注册'
+                  ? 'Already have an account? Sign In' 
+                  : "Don't have an account? Sign Up"
                 }
               </button>
             </div>
