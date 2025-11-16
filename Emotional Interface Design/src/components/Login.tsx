@@ -8,11 +8,12 @@ import { useAuth } from '../context/AuthContext';
 
 interface LoginProps {
   onLogin: (role: 'user' | 'therapist', name: string, userId: string) => void;
+  onBack?: () => void;
 }
 
 type AuthMode = 'select-role' | 'login' | 'register';
 
-export function Login({ onLogin }: LoginProps) {
+export function Login({ onLogin, onBack }: LoginProps) {
   const { signIn, signUp } = useAuth();
   const [authMode, setAuthMode] = useState<AuthMode>('select-role');
   const [selectedRole, setSelectedRole] = useState<'user' | 'therapist' | null>(null);
@@ -24,7 +25,6 @@ export function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // 重置表单状态
   const resetForm = () => {
     setName('');
     setEmail('');
@@ -34,35 +34,29 @@ export function Login({ onLogin }: LoginProps) {
     setLoading(false);
   };
 
-  // 处理角色选择
   const handleRoleSelect = (role: 'user' | 'therapist') => {
     setSelectedRole(role);
     setAuthMode('login');
   };
 
-  // 切换到注册模式
   const handleSwitchToRegister = () => {
     resetForm();
     setAuthMode('register');
   };
 
-  // 切换到登录模式
   const handleSwitchToLogin = () => {
     resetForm();
     setAuthMode('login');
   };
 
-  // 返回角色选择
   const handleBackToRoleSelect = () => {
     resetForm();
     setSelectedRole(null);
     setAuthMode('select-role');
   };
 
-  // 验证表单
-  const validateForm = (): boolean => {
+  const validateForm = () => {
     setError('');
-
     if (authMode === 'register') {
       if (password !== confirmPassword) {
         setError('Passwords do not match');
@@ -77,51 +71,38 @@ export function Login({ onLogin }: LoginProps) {
         return false;
       }
     }
-    
     if (!email.trim()) {
       setError('Please enter your email');
       return false;
     }
-
     if (!password.trim()) {
       setError('Please enter your password');
       return false;
     }
-
     if (!selectedRole) {
       setError('Please select a role');
       return false;
     }
-
     return true;
   };
 
-  // 处理注册
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
 
     setLoading(true);
-
     try {
       const { data, error } = await signUp(email, password, {
         name: name.trim(),
         role: selectedRole,
       });
-
       if (error) throw error;
 
       if (data?.user) {
-        // 注册成功，自动登录
         const loginResult = await signIn(email, password);
-        
-        if (loginResult.error) {
-          throw loginResult.error;
-        }
+        if (loginResult.error) throw loginResult.error;
 
-        // 登录成功，调用 onLogin 回调
-        onLogin(selectedRole, name.trim(), data.user.id);
+        onLogin(selectedRole!, name.trim(), data.user.id);
       }
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
@@ -130,26 +111,19 @@ export function Login({ onLogin }: LoginProps) {
     }
   };
 
-  // 处理登录
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
 
     setLoading(true);
-
     try {
       const { data, error } = await signIn(email, password);
-
       if (error) throw error;
 
       if (data?.user) {
-        // 从用户元数据中获取角色和姓名
-        const userRole = data.user.user_metadata?.role || 'user';
-        const userName = data.user.user_metadata?.name || 'User';
-        
-        // 登录成功，调用 onLogin 回调
-        onLogin(userRole, userName, data.user.id);
+        const role = data.user.user_metadata?.role || 'user';
+        const name = data.user.user_metadata?.name || 'User';
+        onLogin(role, name, data.user.id);
       }
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.');
@@ -162,6 +136,18 @@ export function Login({ onLogin }: LoginProps) {
   if (authMode === 'select-role') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+        {onBack && (
+          <div className="absolute top-6 left-6 z-10">
+            <Button
+              onClick={onBack}
+              variant="outline"
+              className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white shadow-lg"
+              size="lg"
+            >
+              ← Back
+            </Button>
+          </div>
+        )}
         <div className="w-full max-w-4xl">
           <div className="text-center mb-8 animate-in fade-in duration-700">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 mb-6">
@@ -226,10 +212,9 @@ export function Login({ onLogin }: LoginProps) {
             {authMode === 'register' ? 'Create Account' : 'Welcome Back'}
           </h1>
           <p className="text-gray-600">
-            {authMode === 'register' 
+            {authMode === 'register'
               ? `Sign up as ${selectedRole === 'user' ? 'User' : 'Therapist'}`
-              : `Sign in as ${selectedRole === 'user' ? 'User' : 'Therapist'}`
-            }
+              : `Sign in as ${selectedRole === 'user' ? 'User' : 'Therapist'}`}
           </p>
         </div>
 
@@ -241,26 +226,27 @@ export function Login({ onLogin }: LoginProps) {
               </div>
             )}
 
+            {/* Full Name - 注册时才显示 */}
             {authMode === 'register' && (
               <div className="mb-4">
-                <Label htmlFor="name" className="mb-2 block text-sm font-medium">
-                  Full Name
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="Enter your full name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="pl-10"
-                    required
-                  />
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <div className="flex items-center gap-2 mb-2">
+                  <User className="w-4 h-4 text-gray-400" />
+                  <Label htmlFor="name" className="text-sm font-medium">
+                    Full Name
+                  </Label>
                 </div>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </div>
             )}
 
+            {/* Email */}
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
                 <Mail className="w-4 h-4 text-gray-400" />
@@ -268,19 +254,17 @@ export function Login({ onLogin }: LoginProps) {
                   Email Address
                 </Label>
               </div>
-              <div className="relative">
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
+              <Input
+                id="email"
+                type="email"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
 
+            {/* Password */}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -297,17 +281,14 @@ export function Login({ onLogin }: LoginProps) {
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10"
-                  required
-                />
-              </div>
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
               {authMode === 'register' && (
                 <p className="text-xs text-gray-500 mt-1">
                   Password must be at least 6 characters
@@ -315,6 +296,7 @@ export function Login({ onLogin }: LoginProps) {
               )}
             </div>
 
+            {/* Confirm Password - 仅注册时显示 */}
             {authMode === 'register' && (
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-2">
@@ -323,46 +305,47 @@ export function Login({ onLogin }: LoginProps) {
                     Confirm Password
                   </Label>
                 </div>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="pl-10"
-                    required
-                  />
-                </div>
+                <Input
+                  id="confirmPassword"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
               </div>
             )}
 
-            <Button 
+            {/* Submit Button */}
+            <Button
               type="submit"
               size="lg"
               className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
               disabled={loading}
             >
-              {loading ? (
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  {authMode === 'register' ? 'Creating Account...' : 'Signing In...'}
-                </div>
-              ) : (
-                authMode === 'register' ? 'Create Account' : 'Sign In'
-              )}
+              {loading ? 'Loading...' : authMode === 'register' ? 'Create Account' : 'Sign In'}
             </Button>
 
+            {/* Back to role selection button */}
+            <Button
+              type="button"
+              onClick={handleBackToRoleSelect}
+              variant="ghost"
+              className="w-full mt-3 text-purple-600 hover:text-purple-800 transition-all hover:bg-purple-50"
+            >
+              ← Back to role selection
+            </Button>
+
+            {/* Switch between login & register */}
             <div className="mt-4 text-center">
               <button
                 type="button"
                 onClick={authMode === 'register' ? handleSwitchToLogin : handleSwitchToRegister}
                 className="text-purple-600 hover:text-purple-700 text-sm font-medium"
               >
-                {authMode === 'register' 
-                  ? 'Already have an account? Sign in' 
-                  : "Don't have an account? Sign up"
-                }
+                {authMode === 'register'
+                  ? 'Already have an account? Sign in'
+                  : "Don't have an account? Sign up"}
               </button>
             </div>
           </form>

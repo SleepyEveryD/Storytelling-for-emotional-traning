@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { analyzeWithFallback, getRecommendedScenarioFromDB } from './geminiService';
 import { supabase } from './supabase_client';
 import { AuthContextProvider, useAuth } from './context/AuthContext';
+import { LogoutButton } from './components/LogoutButton';
 
 type AppView = 'login' | 'welcome' | 'ai-conversation' | 'caregiver-space' | 'scenarios' | 'story';
 
@@ -210,32 +211,41 @@ function AppContent() {
           </div>
         </div>
       )}
+   
+
 
       {/* 更新导航按钮显示条件，包含 ai-conversation */}
-      {(currentView === 'scenarios' || currentView === 'story' || currentView === 'ai-conversation') && (
-        <div className="absolute top-4 left-4 z-10">
-          <Button 
-            onClick={backToWelcome}
-            variant="outline"
-            className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
-          >
-            <Home className="w-4 h-4" />
-            Home
-          </Button>
-        </div>
-      )}
+ <div className="absolute top-4 right-4 z-10 flex gap-2">
+  <Button 
+    onClick={backToWelcome}
+    variant="outline"
+    className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
+  >
+    <Home className="w-4 h-4" />
+    Home
+  </Button>
+
+  <LogoutButton />
+</div>
+
+
+
       
       {currentView === 'login' && (
         <Login onLogin={handleLogin} />
       )}
+      
 
-      {currentView === 'welcome' && (
-        <WelcomePage
-          onProblemSubmit={handleProblemSubmit}
-          onMicrophoneClick={() => navigateToStory('random')}
-          onNavigateToCaregiverSpace={handleNavigateToCaregiverSpace}
-        />
-      )}
+    {currentView === 'welcome' && (
+  <WelcomePage
+    onProblemSubmit={handleProblemSubmit}
+    onMicrophoneClick={() => navigateToStory('random')}
+    onNavigateToCaregiverSpace={handleNavigateToCaregiverSpace}
+   
+   // ⭐ 加这一行！
+  />
+)}
+
 
       {/* 新增 AI 对话组件 */}
       {currentView === 'ai-conversation' && (
