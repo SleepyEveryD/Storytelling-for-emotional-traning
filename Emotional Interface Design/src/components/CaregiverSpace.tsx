@@ -47,6 +47,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
   const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
+  const [searchText, setSearchText] = useState(''); // ⭐ 添加这一行
 
   // Therapist authentication and protection
   useEffect(() => {
@@ -352,32 +353,77 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                   Create New Session
                 </Button>
               </DialogTrigger>
+              
               <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Create New Session</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="userName">Patient Name</Label>
-                    <Input
-                      id="userName"
-                      type="text"
-                      placeholder="Enter patient name"
-                      value={newUserName}
-                      onChange={(e) => setNewUserName(e.target.value)}
-                      className="mt-2"
-                      autoFocus
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                    disabled={!newUserName.trim() || isCreating}
-                  >
-                    {isCreating ? 'Creating...' : 'Create Session'}
-                  </Button>
-                </form>
+                    <DialogHeader>
+                      <DialogTitle>Create New Session</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Left: Connect Existing User */}
+                      <div className="space-y-4 p-4 border rounded-lg shadow-sm">
+                        <h3 className="text-lg font-medium mb-2">Connect Existing User</h3>
+
+                        <div>
+                          <Label htmlFor="searchUser">Search User</Label>
+                          <Input
+                            id="searchUser"
+                            type="text"
+                            placeholder="Search by patient ID"
+                        
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            className="mt-2"
+                          />
+                        </div>
+
+                        <Button
+                          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                          onClick={() => {
+                            const matchedUser = users.find(user =>
+                              user.name.toLowerCase().includes(searchText.toLowerCase())
+                            );
+                            if (matchedUser) {
+                              onSelectUser(matchedUser.id, matchedUser.name);
+                              setIsDialogOpen(false);
+                            } else {
+                              alert('User not found.');
+                            }
+                          }}
+                          disabled={!searchText.trim()}
+                        >
+                          Connect Existing User
+                        </Button>
+                      </div>
+
+                      {/* Right: Create New Session */}
+                      <form onSubmit={handleCreateUser} className="space-y-4 p-4 border rounded-lg shadow-sm">
+                        <h3 className="text-lg font-medium mb-2">Create New Session</h3>
+
+                        <div>
+                          <Label htmlFor="userName">Patient Name</Label>
+                          <Input
+                            id="userName"
+                            type="text"
+                            placeholder="Enter patient name"
+                            value={newUserName}
+                            onChange={(e) => setNewUserName(e.target.value)}
+                            className="mt-2"
+                            autoFocus
+                          />
+                        </div>
+
+                        <Button
+                          type="submit"
+                          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                          disabled={!newUserName.trim() || isCreating}
+                        >
+                          {isCreating ? 'Creating...' : 'Create Session'}
+                        </Button>
+                      </form>
+                    </div>
               </DialogContent>
+
             </Dialog>
           </div>
         </div>
@@ -444,6 +490,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
               <p className="text-gray-500 mb-6">
                 Create your first session to start managing patients
               </p>
+              
               <Button 
                 onClick={() => setIsDialogOpen(true)}
                 className="gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"

@@ -91,11 +91,17 @@ export function Login({ onLogin, onBack }: LoginProps) {
     if (!validateForm()) return;
 
     setLoading(true);
+    console.log("📌 正在注册，当前角色为:", selectedRole);
     try {
-      const { data, error } = await signUp(email, password, {
-        name: name.trim(),
-        role: selectedRole,
-      });
+      const { data, error } = await signUp(
+        email,
+        password,
+        selectedRole!, // 第三个参数：角色（必须是 'user' 或 'therapist'）
+        { name: name.trim() } // 第四个参数：用户元数据
+      );
+      
+      
+      
       if (error) throw error;
 
       if (data?.user) {

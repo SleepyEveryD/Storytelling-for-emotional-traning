@@ -57,32 +57,60 @@ export const AuthContextProvider = ({ children }) => {
             return { data: null, error };
         }
     };
+  
+   // 注册函数 - 添加角色验证和设置
+const signUp = async (email, password, role = ALLOWED_ROLES.USER, additionalMetadata = {}) => {
+  try {
+    // 验证角色是否合法
+    if (!Object.values(ALLOWED_ROLES).includes(role)) {
+      throw new Error(`无效的角色类型。只允许: ${Object.values(ALLOWED_ROLES).join(', ')}`);
+    }
 
-    // 注册函数 - 添加角色验证和设置
-    const signUp = async (email, password, role = ALLOWED_ROLES.USER, additionalMetadata = {}) => {
-        try {
-            // 验证角色是否合法
-            if (!Object.values(ALLOWED_ROLES).includes(role)) {
-                throw new Error(`无效的角色类型。只允许: ${Object.values(ALLOWED_ROLES).join(', ')}`);
-            }
+    // 调用 Supabase 注册 API
+    const { data: signupData, error: signupError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          role: role, // 设置用户角色
+          created_at: new Date().toISOString(),
+          ...additionalMetadata // 其他可选元数据
+        },
+      },
+    });
 
-            const { data, error } = await supabase.auth.signUp({
-                email,
-                password,
-                options: {
-                    data: {
-                        role: role, // 设置用户角色
-                        created_at: new Date().toISOString(),
-                        ...additionalMetadata // 其他可选元数据
-                    },
-                },
-            });
-            if (error) throw error;
-            return { data, error: null };
-        } catch (error) {
-            return { data: null, error };
-        }
-    };
+    if (signupError) throw signupError;
+
+    const userId = signupData.user?.id;
+    if (!userId) throw new Error("注册成功但未获取用户ID");
+
+    // 如果是普通用户，插入到 patients 表
+    if (role === ALLOWED_ROLES.USER) {
+      const { error: insertError } = await supabase
+        .from("patients")
+        .insert([
+          {
+            patient_user_id: userId,
+            name: additionalMetadata.name || "New User", // 可根据需要调整
+            email, // 或是否不需要 email
+            status: "active",
+          },
+        ]);
+
+      if (insertError) {
+        console.error("Failed to insert patient:", insertError.message);
+        throw new Error("患者数据保存失败：" + insertError.message);
+      }
+    }
+
+    return { data: signupData, error: null };
+  } catch (error) {
+    console.error("❌ 注册过程出错:", error.message);
+    return { data: null, error };
+  }
+};
+
+    
 
     // 专门的治疗师注册函数
     const signUpAsTherapist = async (email, password, therapistData = {}) => {
