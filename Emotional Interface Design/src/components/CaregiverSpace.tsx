@@ -4,6 +4,11 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { handleConnect } from '../services/ConnectingUser';
+import { toast } from 'sonner';
+import { connectExistingUser } from '../services/ConnectingUser';
+
+
 import { 
   ArrowLeft, 
   UserPlus, 
@@ -48,6 +53,7 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
   const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
   const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
   const [searchText, setSearchText] = useState(''); // ⭐ 添加这一行
+  
 
   // Therapist authentication and protection
   useEffect(() => {
@@ -377,23 +383,27 @@ export function CaregiverSpace({ onBack, onSelectUser }: CaregiverSpaceProps) {
                           />
                         </div>
 
-                        <Button
-                          className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                          onClick={() => {
-                            const matchedUser = users.find(user =>
-                              user.name.toLowerCase().includes(searchText.toLowerCase())
-                            );
-                            if (matchedUser) {
-                              onSelectUser(matchedUser.id, matchedUser.name);
-                              setIsDialogOpen(false);
-                            } else {
-                              alert('User not found.');
-                            }
-                          }}
-                          disabled={!searchText.trim()}
-                        >
-                          Connect Existing User
-                        </Button>
+                      <Button
+                        className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                        onClick={async () => {
+                          const patientId = searchText.trim();
+                          if (!patientId) return;
+
+                          // 调用连接逻辑
+                          const result = await connectExistingUser(patientId, user.id);
+                          if (result.success) {
+                            alert(`Successfully connected patient ${patientId} to your account.`);
+                            setIsDialogOpen(false);
+                            fetchPatients(); // refresh the UI
+                          } else {
+                            alert(`Error: ${result.message}`);
+                          }
+                        }}
+                        disabled={!searchText.trim()}
+                      >
+                        Connect Existing User
+                      </Button>
+
                       </div>
 
                       {/* Right: Create New Session */}
