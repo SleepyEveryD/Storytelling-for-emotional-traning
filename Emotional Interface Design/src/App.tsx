@@ -9,7 +9,7 @@ import { Toaster } from './components/ui/sonner';
 import { Button } from './components/ui/button';
 import { Home } from 'lucide-react';
 import { toast } from 'sonner';
-import { analyzeWithFallback, getRecommendedScenarioFromDB } from './geminiService';
+import { analyzeWithFallback, getRecommendedScenarioFromDB } from './services/geminiService';
 import { supabase } from './supabase_client';
 import { AuthContextProvider, useAuth } from './context/AuthContext';
 import { LogoutButton } from './components/LogoutButton';
@@ -266,7 +266,7 @@ function AppContent() {
 )}
 
 
-      {/* 新增 AI 对话组件 */}
+      {/* AI conversation */}
       {currentView === 'ai-conversation' && (
         <AIConversation
           userProblem={userProblem}

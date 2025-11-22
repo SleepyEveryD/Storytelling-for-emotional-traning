@@ -4,6 +4,8 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Card } from './ui/card';
 import { Send, Bot, User, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { getAIChatResponse } from '../services/geminiService'; 
+
 
 interface AIConversationProps {
   userProblem: string;
@@ -39,67 +41,49 @@ export function AIConversation({ userProblem, onAcceptPractice, onDeclinePractic
 
   const handleSendMessage = async () => {
     if (!userInput.trim() || isLoading) return;
-
+  
     const userMessage: Message = {
       role: 'user',
       content: userInput.trim()
     };
-
-    // 添加用户消息
+  
     setConversation(prev => [...prev, userMessage]);
     setUserInput('');
     setIsLoading(true);
-
+  
     try {
-      // 模拟AI回复（这里可以替换为真实的AI API调用）
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const aiResponse: Message = {
+      // 调用真实 Gemini API
+      const aiReply = await getAIChatResponse([
+        ...conversation,
+        userMessage
+      ]);
+  
+      const aiMessage: Message = {
         role: 'assistant',
-        content: generateAIResponse([...conversation, userMessage])
+        content: aiReply
       };
-
-      setConversation(prev => [...prev, aiResponse]);
-
-      // 检查是否应该提示练习（在3-4轮对话后）
+  
+      setConversation(prev => [...prev, aiMessage]);
+  
+      // 激活练习建议
       if (conversation.length >= 4 && !showPracticePrompt) {
         setShowPracticePrompt(true);
       }
-
+  
     } catch (error) {
-      console.error('Error in AI conversation:', error);
-      const errorMessage: Message = {
-        role: 'assistant',
-        content: 'I apologize, but I encountered an error. Would you like to continue talking about your situation?'
-      };
-      setConversation(prev => [...prev, errorMessage]);
+      console.error("Error:", error);
+      setConversation(prev => [
+        ...prev,
+        {
+          role: "assistant",
+          content: "Sorry, something went wrong. Do you want to continue?"
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const generateAIResponse = (currentConversation: Message[]): string => {
-    const lastUserMessage = currentConversation[currentConversation.length - 1].content.toLowerCase();
-    
-    // 简单的响应逻辑 - 可以替换为真实的AI服务
-    if (lastUserMessage.includes('feel') || lastUserMessage.includes('emotion')) {
-      return "Thank you for sharing your feelings. Understanding emotions is the first step. Can you tell me more about what triggers these feelings?";
-    } else if (lastUserMessage.includes('friend') || lastUserMessage.includes('family')) {
-      return "Relationships can be challenging. It sounds like this situation is important to you. How do you usually handle similar situations?";
-    } else if (lastUserMessage.includes('work') || lastUserMessage.includes('job')) {
-      return "Work-related stress is common. It helps to develop coping strategies. What aspects of this situation are most difficult for you?";
-    } else if (lastUserMessage.includes('anxious') || lastUserMessage.includes('nervous')) {
-      return "Anxiety can be overwhelming. Recognizing triggers is key. What situations typically make you feel this way?";
-    } else {
-      const responses = [
-        "I see, thank you for explaining. How does this affect your daily life?",
-        "That's insightful. What do you think would help improve this situation?",
-        "I understand. Have you tried any strategies to cope with this?",
-        "Thank you for sharing. What would you like to see change in this situation?"
-      ];
-      return responses[Math.floor(Math.random() * responses.length)];
-    }
-  };
 
   // 这里就是需要添加的函数 - 处理接受练习
   const handleAcceptPractice = () => {
