@@ -1,187 +1,60 @@
 // geminiService.ts
 import { supabase } from "../supabase_client";
 
-// ⭐ 正确的 Vite 环境变量写法（不能用 process.env）
+// ⭐ 使用 Vite 环境变量
 const apiKey = import.meta.env.VITE_GEMINI_KEY;
 
-// ⭐ 确保 key 存在（可选）
 if (!apiKey) {
   console.warn("⚠️ Warning: VITE_GEMINI_KEY is missing!");
 }
 
-// 原有的模拟函数
-export function analyzeWithFallback(context: string): string {
-  const lowerContext = context.toLowerCase();
+/* -------------------------------------------------------
+   🟦 SECTION 1 — 系统 Prompt（儿童情绪支持模式）
+------------------------------------------------------- */
+const ChildTherapySystemPrompt = `
+You are a gentle, safe, emotionally supportive AI companion designed for children ages 8–12 who struggle with emotional recognition or emotional regulation.
 
-  if (lowerContext.includes("family") || lowerContext.includes("parent")) {
-    return "family-conflict";
-  } else if (lowerContext.includes("work") || lowerContext.includes("job")) {
-    return "workplace-feedback";
-  } else if (
-    lowerContext.includes("friend") ||
-    lowerContext.includes("trust")
-  ) {
-    return "friendship-betrayal";
-  } else if (
-    lowerContext.includes("anxious") ||
-    lowerContext.includes("social")
-  ) {
-    return "social-anxiety";
-  } else if (
-    lowerContext.includes("relationship") ||
-    lowerContext.includes("partner")
-  ) {
-    return "romantic-miscommunication";
-  } else if (lowerContext.includes("study") || lowerContext.includes("exam")) {
-    return "academic-pressure";
-  }
+Your responsibilities:
+1. Talk kindly with the child using warm, simple, friendly language.
+2. Understand their feelings—even if their expression is unclear.
+3. Help them recognize and name emotions in kid-friendly ways.
+4. Comfort them, validate their feelings, and be patient.
+5. Ask gentle questions to understand their situation and emotions.
+6. Support emotional awareness without judging or blaming.
+7. Gradually guide them into a story-based emotional training scenario.
+8. Never lecture or overwhelm the child.
+9. Keep responses short, clear, soft, and safe.
+10. Avoid complex psychological terms; use simple explanations.
 
-  return "family-conflict";
-}
+Your goal is to support the child emotionally and softly lead them into story practice when they feel ready.
+`.trim();
 
-// ----------------------
-// 从数据库获取推荐场景（保持原样）
-// ----------------------
-export async function getRecommendedScenarioFromDB(
-  context: string
-): Promise<string> {
-  try {
-    const analysis = analyzeUserContext(context);
-
-    const { data: scenarios, error } = await supabase
-      .from("scenarios")
-      .select("*")
-      .order("created_at", { ascending: true });
-
-    if (error || !scenarios) {
-      console.error("Error fetching scenarios from DB:", error);
-      return analyzeWithFallback(context);
-    }
-
-    const recommendedScenario = findBestMatch(scenarios, analysis);
-    return recommendedScenario.id;
-
-  } catch (error) {
-    console.error("Error in getRecommendedScenarioFromDB:", error);
-    return analyzeWithFallback(context);
-  }
-}
-
-// ----------------------
-// 分析用户上下文
-// ----------------------
-function analyzeUserContext(context: string) {
-  const lowerContext = context.toLowerCase();
-
-  return {
-    hasFamily:
-      lowerContext.includes("family") || lowerContext.includes("parent"),
-    hasWork:
-      lowerContext.includes("work") ||
-      lowerContext.includes("job") ||
-      lowerContext.includes("colleague"),
-    hasFriends:
-      lowerContext.includes("friend") ||
-      lowerContext.includes("trust") ||
-      lowerContext.includes("betray"),
-    hasSocialAnxiety:
-      lowerContext.includes("anxious") ||
-      lowerContext.includes("social") ||
-      lowerContext.includes("crowd"),
-    hasRelationship:
-      lowerContext.includes("relationship") ||
-      lowerContext.includes("partner") ||
-      lowerContext.includes("romantic"),
-    hasAcademic:
-      lowerContext.includes("study") ||
-      lowerContext.includes("exam") ||
-      lowerContext.includes("school"),
-    emotions: extractEmotions(lowerContext),
-  };
-}
-
-// ----------------------
-// 提取情绪关键词
-// ----------------------
-function extractEmotions(text: string): string[] {
-  const emotions = [];
-  const emotionKeywords = {
-    anger: ["angry", "mad", "frustrated", "annoyed"],
-    sadness: ["sad", "depressed", "unhappy", "disappointed"],
-    anxiety: ["anxious", "nervous", "worried", "stressed"],
-    fear: ["scared", "afraid", "fearful"],
-    joy: ["happy", "excited", "joyful"],
-    trust: ["trust", "betrayed", "loyal"],
-    surprise: ["surprised", "shocked"],
-  };
-
-  for (const [emotion, keywords] of Object.entries(emotionKeywords)) {
-    if (keywords.some((keyword) => text.includes(keyword))) {
-      emotions.push(emotion);
-    }
-  }
-
-  return emotions;
-}
-
-// ----------------------
-// 找到最佳匹配场景
-// ----------------------
-function findBestMatch(scenarios: any[], analysis: any): any {
-  let bestMatch = scenarios[0];
-  let highestScore = 0;
-
-  for (const scenario of scenarios) {
-    let score = 0;
-
-    if (analysis.hasFamily && scenario.id.includes("family")) score += 3;
-    if (analysis.hasWork && scenario.id.includes("workplace")) score += 3;
-    if (analysis.hasFriends && scenario.id.includes("friendship")) score += 3;
-    if (analysis.hasSocialAnxiety && scenario.id.includes("social")) score += 3;
-    if (analysis.hasRelationship && scenario.id.includes("romantic"))
-      score += 3;
-    if (analysis.hasAcademic && scenario.id.includes("academic")) score += 3;
-
-    if (scenario.emotions && analysis.emotions.length > 0) {
-      const matchingEmotions = scenario.emotions.filter((emotion: string) =>
-        analysis.emotions.includes(emotion.toLowerCase())
-      );
-      score += matchingEmotions.length * 2;
-    }
-
-    if (
-      analysis.emotions.includes("anxiety") ||
-      analysis.emotions.includes("fear")
-    ) {
-      if (scenario.difficulty === "Beginner") score += 1;
-    }
-
-    if (score > highestScore) {
-      highestScore = score;
-      bestMatch = scenario;
-    }
-  }
-
-  return bestMatch;
-}
-
-// ----------------------
-// 真实 Gemini API 请求
-// ----------------------
+/* -------------------------------------------------------
+   🟦 SECTION 2 — 导出：AI 对话
+------------------------------------------------------- */
 export async function getAIChatResponse(
   conversation: { role: string; content: string }[]
 ) {
   try {
+    // 注入系统提示
+    const fullConversation = [
+      {
+        role: "model",
+        parts: [{ text: ChildTherapySystemPrompt }],
+      },
+      ...conversation.map((msg) => ({
+        role: msg.role === "user" ? "user" : "model",
+        parts: [{ text: msg.content }],
+      })),
+    ];
+
     const result = await fetch(
       `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents: conversation.map((msg) => ({
-            role: msg.role === "user" ? "user" : "model",
-            parts: [{ text: msg.content }],
-          })),
+          contents: fullConversation,
         }),
       }
     );
@@ -196,3 +69,142 @@ export async function getAIChatResponse(
   }
 }
 
+/* -------------------------------------------------------
+   🟦 SECTION 3 — 导出：本地 fallback 场景分析
+------------------------------------------------------- */
+export function analyzeWithFallback(context: string): string {
+  const lower = context.toLowerCase();
+
+  if (lower.includes("family") || lower.includes("parent"))
+    return "family-conflict";
+
+  if (lower.includes("work") || lower.includes("job"))
+    return "workplace-feedback";
+
+  if (lower.includes("friend") || lower.includes("trust"))
+    return "friendship-betrayal";
+
+  if (lower.includes("anxious") || lower.includes("social"))
+    return "social-anxiety";
+
+  if (lower.includes("relationship") || lower.includes("partner"))
+    return "romantic-miscommunication";
+
+  if (lower.includes("study") || lower.includes("exam"))
+    return "academic-pressure";
+
+  return "family-conflict";
+}
+
+/* -------------------------------------------------------
+   🟦 SECTION 4 — 导出：从数据库推荐场景
+------------------------------------------------------- */
+export async function getRecommendedScenarioFromDB(
+  context: string
+): Promise<string> {
+  try {
+    const analysis = analyzeUserContext(context);
+
+    const { data: scenarios, error } = await supabase
+      .from("scenarios")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    if (error || !scenarios) {
+      console.error("Error fetching scenarios:", error);
+      return analyzeWithFallback(context);
+    }
+
+    const best = findBestMatch(scenarios, analysis);
+    return best.id;
+  } catch (e) {
+    console.error("Error in getRecommendedScenarioFromDB:", e);
+    return analyzeWithFallback(context);
+  }
+}
+
+/* -------------------------------------------------------
+   🟦 SECTION 5 — 内部工具（不导出）
+------------------------------------------------------- */
+function analyzeUserContext(context: string) {
+  const lower = context.toLowerCase();
+
+  return {
+    hasFamily: lower.includes("family") || lower.includes("parent"),
+    hasWork:
+      lower.includes("work") ||
+      lower.includes("job") ||
+      lower.includes("colleague"),
+    hasFriends:
+      lower.includes("friend") ||
+      lower.includes("trust") ||
+      lower.includes("betray"),
+    hasSocialAnxiety:
+      lower.includes("anxious") ||
+      lower.includes("social") ||
+      lower.includes("crowd"),
+    hasRelationship:
+      lower.includes("relationship") ||
+      lower.includes("partner") ||
+      lower.includes("romantic"),
+    hasAcademic:
+      lower.includes("study") ||
+      lower.includes("exam") ||
+      lower.includes("school"),
+    emotions: extractEmotions(lower),
+  };
+}
+
+function extractEmotions(text: string): string[] {
+  const emotionKeywords: Record<string, string[]> = {
+    anger: ["angry", "mad", "frustrated", "annoyed"],
+    sadness: ["sad", "depressed", "unhappy", "disappointed"],
+    anxiety: ["anxious", "nervous", "worried", "stressed"],
+    fear: ["scared", "afraid", "fearful"],
+    joy: ["happy", "excited", "joyful"],
+    trust: ["trust", "betrayed", "loyal"],
+    surprise: ["surprised", "shocked"],
+  };
+
+  return Object.entries(emotionKeywords).flatMap(([emotion, words]) =>
+    words.some((w) => text.includes(w)) ? [emotion] : []
+  );
+}
+
+function findBestMatch(scenarios: any[], analysis: any): any {
+  let best = scenarios[0];
+  let highest = 0;
+
+  for (const s of scenarios) {
+    let score = 0;
+
+    if (analysis.hasFamily && s.id.includes("family")) score += 3;
+    if (analysis.hasWork && s.id.includes("workplace")) score += 3;
+    if (analysis.hasFriends && s.id.includes("friendship")) score += 3;
+    if (analysis.hasSocialAnxiety && s.id.includes("social")) score += 3;
+    if (analysis.hasRelationship && s.id.includes("romantic")) score += 3;
+    if (analysis.hasAcademic && s.id.includes("academic")) score += 3;
+
+    if (s.emotions && analysis.emotions.length > 0) {
+      const match = s.emotions.filter((e: string) =>
+        analysis.emotions.includes(e.toLowerCase())
+      );
+      score += match.length * 2;
+    }
+
+    if (
+      (analysis.emotions.includes("anxiety") ||
+        analysis.emotions.includes("fear")) &&
+      s.difficulty === "Beginner"
+    ) {
+      score += 1;
+    }
+
+    if (score > highest) {
+      highest = score;
+      best = s;
+    }
+  }
+
+  return best;
+}
