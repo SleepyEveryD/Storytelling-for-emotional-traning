@@ -1,267 +1,356 @@
-import { useState, useEffect } from 'react';
-import { WelcomePage } from './components/WelcomePage';
-import { AIConversation } from './components/AIConversation';
-import { CaregiverSpace } from './components/CaregiverSpace';
-import { ScenarioSelection } from './components/ScenarioSelection';
-import { StoryViewer } from './components/StoryViewer';
-import { Login } from './components/Login';
-import { Toaster } from './components/ui/sonner';
-import { Button } from './components/ui/button';
-import { Home, Users } from 'lucide-react';
-import { toast } from 'sonner';
-import { analyzeWithFallback, getRecommendedScenarioFromDB } from './geminiService';
-import { supabase } from './supabase_client';
-import { AuthContextProvider, useAuth } from './context/AuthContext';
-import { LogoutButton } from './components/LogoutButton';
+import { createContext, useEffect, useState, useContext } from "react";
+import { supabase } from "../supabase_client";
 
-type AppView = 'login' | 'welcome' | 'ai-conversation' | 'caregiver-space' | 'scenarios' | 'story';
+const AuthContext = createContext();
 
-function AppContent() {
-  const { isTherapist, user, loading: authLoading } = useAuth();
-  const [currentView, setCurrentView] = useState<AppView>('login');
-  const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [selectedUserName, setSelectedUserName] = useState<string>('');
-  const [userProgress, setUserProgress] = useState<{ [key: string]: number }>({});
-  const [showWelcome, setShowWelcome] = useState(true);
+// 定义允许的角色类型
+const ALLOWED_ROLES = {
+    USER: 'user',
+    THERAPIST: 'therapist'
+};
 
-  const [currentPatientId, setCurrentPatientId] = useState<string | null>(null);
-  const [currentPatientName, setCurrentPatientName] = useState<string | null>(null);
+export const AuthContextProvider = ({ children }) => {
+    const [session, setSession] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-  // AI related states
-  const [userProblem, setUserProblem] = useState<string>('');
-  const [scenarioLoading, setScenarioLoading] = useState(false);
+    useEffect(() => {
+        // 获取当前会话
+        const getSession = async () => {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+                
+                setSession(session);
+                setUser(session?.user || null);
+            } catch (error) {
+                console.error("Error getting session:", error.message);
+            } finally {
+                setLoading(false);
+            }
+        };
 
-  const handleProblemSubmit = async (problem: string) => {
-    setUserProblem(problem);
-    setCurrentView('ai-conversation');
-  };
+        getSession();
 
-  const handleAcceptPractice = async (fullContext: string) => {
-    try {
-      setScenarioLoading(true);
-      const scenarioId = await getRecommendedScenarioFromDB(fullContext);
-
-      const { data: scenario, error } = await supabase
-        .from('scenarios')
-        .select('title, description, difficulty')
-        .eq('id', scenarioId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching scenario details:', error);
-        const fallbackScenarioId = analyzeWithFallback(fullContext);
-        toast.success(`Let's practice with: ${fallbackScenarioId}`);
-        setSelectedScenario(fallbackScenarioId);
-      } else {
-        toast.success(
-          <div className="flex flex-col gap-1">
-            <span className="font-semibold">Perfect match found!</span>
-            <span>Let's practice: {scenario.title}</span>
-            <span className="text-sm text-gray-600">Difficulty: {scenario.difficulty}</span>
-          </div>
+        // 监听认证状态变化
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            async (event, session) => {
+                setSession(session);
+                setUser(session?.user || null);
+                setLoading(false);
+            }
         );
-        setSelectedScenario(scenarioId);
-      }
-      setCurrentView('story');
-    } catch (error) {
-      console.error('Error in handleAcceptPractice:', error);
-      const scenarioId = analyzeWithFallback(fullContext);
-      toast.success(`Let's practice with: ${scenarioId}`);
-      setSelectedScenario(scenarioId);
-      setCurrentView('story');
-    } finally {
-      setScenarioLoading(false);
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    // 登录函数
+    const signIn = async (email, password) => {
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email,
+                password,
+            });
+            if (error) throw error;
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+  
+   // 注册函数 - 添加角色验证和设置
+const signUp = async (email, password, role = ALLOWED_ROLES.USER, additionalMetadata = {}) => {
+  try {
+    // 验证角色是否合法
+    if (!Object.values(ALLOWED_ROLES).includes(role)) {
+      throw new Error(`无效的角色类型。只允许: ${Object.values(ALLOWED_ROLES).join(', ')}`);
     }
-  };
 
-  const handleDeclinePractice = () => {
-    toast.info("That's okay! You can come back anytime you're ready.");
-    setCurrentView('welcome');
-    setUserProblem('');
-  };
-
-  const handleScenarioComplete = (scenarioId: string, score: number) => {
-    setUserProgress(prev => ({
-      ...prev,
-      [scenarioId]: score,
-    }));
-    setSelectedScenario(null);
-    setCurrentView('scenarios');
-  };
-
-  // Navigation helpers
-  const navigateToLogin = () => setCurrentView('login');
-  const navigateToWelcome = () => setCurrentView('welcome');
-  const navigateToCaregiverSpace = () => setCurrentView('caregiver-space');
-  const navigateToScenarios = () => setCurrentView('scenarios');
-  const navigateToStory = (scenarioId: string) => {
-    setSelectedScenario(scenarioId);
-    setCurrentView('story');
-  };
-
-  const backToMenu = () => {
-    setSelectedScenario(null);
-    setCurrentView('scenarios');
-  };
-
-  const backToWelcome = () => {
-    setSelectedScenario(null);
-    setCurrentView('welcome');
-  };
-
-  const handleLogin = (role: 'user' | 'therapist', name: string, userId: string) => {
-    navigateToWelcome();
-  };
-
-  const handleNavigateToCaregiverSpace = () => {
-    if (!user) {
-      toast.warning('Please log in first');
-      navigateToLogin();
-      return;
-    }
-    if (!isTherapist) {
-      toast.error('Unauthorized: Only therapists can enter this space');
-      return;
-    }
-    navigateToCaregiverSpace();
-  };
-
-  const handleSelectUser = (userId: string, userName: string) => {
-    setSelectedUserId(userId);
-    setSelectedUserName(userName);
-    setCurrentPatientId(userId);
-    setCurrentPatientName(userName);
-    navigateToScenarios();
-  };
-
-  const handleStartJourney = () => setShowWelcome(false);
-
-  const handleSelectScenario = (scenarioId: string) => navigateToStory(scenarioId);
-
-  useEffect(() => {
-    setUserProgress({
-      'family-conflict': 85,
-      'workplace-feedback': 60,
+    // 调用 Supabase 注册 API
+    const { data: signupData, error: signupError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          role: role, // 设置用户角色
+          created_at: new Date().toISOString(),
+          ...additionalMetadata // 其他可选元数据
+        },
+      },
     });
-  }, [selectedUserId]);
 
-  // Redirect user based on role
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      setCurrentView('login');
-      return;
-    }
-    if (isTherapist) {
-      setCurrentView('caregiver-space');
-    } else {
-      setCurrentView('welcome');
-    }
-  }, [user, isTherapist, authLoading]);
+    if (signupError) throw signupError;
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">加载中...</p>
-        </div>
-      </div>
-    );
+    const userId = signupData.user?.id;
+    if (!userId) throw new Error("注册成功但未获取用户ID");
+
+    // 如果是普通用户，插入到 patients 表
+    if (role === ALLOWED_ROLES.USER) {
+      const { error: insertError } = await supabase
+        .from("patients")
+        .insert([
+          {
+            patient_user_id: userId,
+            name: additionalMetadata.name || "New User", // 可根据需要调整
+            email, // 或是否不需要 email
+            status: "active",
+          },
+        ]);
+
+      if (insertError) {
+        console.error("Failed to insert patient:", insertError.message);
+        throw new Error("患者数据保存失败：" + insertError.message);
+      }
+    }
+
+    return { data: signupData, error: null };
+  } catch (error) {
+    console.error("❌ 注册过程出错:", error.message);
+    return { data: null, error };
   }
+};
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Navigate buttons */}
-      <div className="absolute top-4 right-4 z-10 flex gap-2">
-        <Button 
-          onClick={backToWelcome}
-          variant="outline"
-          className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
-        >
-          <Home className="w-4 h-4" />
-          Home
-        </Button>
+    
 
-        <Button
-          onClick={handleNavigateToCaregiverSpace}
-          variant="outline"
-          className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white shadow-lg"
-        >
-          <Users className="w-4 h-4" />
-          Caregiver Space
-        </Button>
+    // 专门的治疗师注册函数
+    const signUpAsTherapist = async (email, password, therapistData = {}) => {
+        return await signUp(
+            email, 
+            password, 
+            ALLOWED_ROLES.THERAPIST, 
+            therapistData
+        );
+    };
 
-        <LogoutButton />
-      </div>
+    // 专门的用户注册函数
+    const signUpAsUser = async (email, password, userData = {}) => {
+        return await signUp(
+            email, 
+            password, 
+            ALLOWED_ROLES.USER, 
+            userData
+        );
+    };
 
-      {/* Loading indicator during scenario matching */}
-      {scenarioLoading && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 flex items-center gap-3">
-            <div className="w-6 h-6 border-2 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-            <span>Finding the perfect story for you...</span>
-          </div>
-        </div>
-      )}
+    // 治疗师创建患者账户（保持治疗师登录状态）
+    const createPatientAccount = async (patientData) => {
+        try {
+            const { email, password, name, age, notes } = patientData;
+            
+            // 1. 首先检查邮箱是否已存在
+            const { data: existingUser, error: checkError } = await supabase
+                .from('profiles')
+                .select('id, email')
+                .eq('email', email)
+                .single();
 
-      {currentView === 'login' && <Login onLogin={handleLogin} />}
+            if (existingUser) {
+                throw new Error('该邮箱已被注册');
+            }
 
-      {currentView === 'welcome' && (
-        <WelcomePage
-          onProblemSubmit={handleProblemSubmit}
-          onMicrophoneClick={() => navigateToStory('random')}
-          onNavigateToCaregiverSpace={handleNavigateToCaregiverSpace}
-        />
-      )}
+            // 2. 创建患者账户
+            const { data: authData, error: signUpError } = await signUpAsUser(
+                email, 
+                password, 
+                { 
+                    name,
+                    age,
+                    notes,
+                    created_by: user.id, // 记录创建者（治疗师ID）
+                    therapist_id: user.id, // 关联的治疗师
+                    created_at: new Date().toISOString()
+                }
+            );
 
-      {currentView === 'ai-conversation' && (
-        <AIConversation
-          userProblem={userProblem}
-          onAcceptPractice={handleAcceptPractice}
-          onDeclinePractice={handleDeclinePractice}
-        />
-      )}
+            if (signUpError) throw signUpError;
 
-      {currentView === 'caregiver-space' && (
-        <CaregiverSpace
-          onBack={backToWelcome}
-          onSelectUser={handleSelectUser}
-        />
-      )}
+            // 3. 在 patients 表中创建关联记录（如果需要）
+            if (authData.user) {
+                const { error: patientError } = await supabase
+                    .from('patients')
+                    .insert({
+                        patient_id: authData.user.id,
+                        therapist_id: user.id,
+                        name: name,
+                        email: email,
+                        age: age,
+                        notes: notes,
+                        created_at: new Date().toISOString()
+                    });
 
-      {currentView === 'scenarios' && (
-        <ScenarioSelection
-          onSelectScenario={handleSelectScenario}
-          progress={userProgress}
-          showWelcome={showWelcome}
-          onStartJourney={handleStartJourney}
-          userRole={isTherapist ? 'therapist' : 'user'}
-          userName={selectedUserName || user?.user_metadata?.name || 'User'}
-          userId={selectedUserId || user?.id || ''}
-        />
-      )}
+                if (patientError) {
+                    console.error('创建患者关联记录失败:', patientError);
+                    // 这里不抛出错误，因为用户账户已经创建成功
+                }
 
-      {currentView === 'story' && selectedScenario && (
-        <StoryViewer
-          scenarioId={selectedScenario}
-          onComplete={handleScenarioComplete}
-          onBack={backToMenu}
-          patientId={currentPatientId || selectedUserId || user?.id}
-          patientName={currentPatientName || selectedUserName || user?.user_metadata?.name}
-        />
-      )}
+                console.log('患者账户创建成功:', authData.user.id);
+            }
 
-      <Toaster />
-    </div>
-  );
-}
+            return { 
+                data: authData, 
+                error: null 
+            };
+        } catch (error) {
+            console.error('创建患者账户失败:', error);
+            return { 
+                data: null, 
+                error: error.message || '创建患者账户失败'
+            };
+        }
+    };
 
-export default function App() {
-  return (
-    <AuthContextProvider>
-      <AppContent />
-    </AuthContextProvider>
-  );
-}
+    // 批量创建患者账户
+    const createMultiplePatientAccounts = async (patientsData) => {
+        const results = [];
+        
+        for (const patientData of patientsData) {
+            const result = await createPatientAccount(patientData);
+            results.push({
+                email: patientData.email,
+                ...result
+            });
+        }
+        
+        return results;
+    };
+
+    // 获取当前治疗师的所有患者
+    const getTherapistPatients = async () => {
+        try {
+            if (!user || !isTherapist) {
+                throw new Error('只有治疗师可以查看患者列表');
+            }
+
+            const { data, error } = await supabase
+                .from('patients')
+                .select(`
+                    *,
+                    profiles:patient_id (name, email, user_metadata)
+                `)
+                .eq('therapist_id', user.id)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 更新患者信息
+    const updatePatientInfo = async (patientId, updates) => {
+        try {
+            if (!user || !isTherapist) {
+                throw new Error('只有治疗师可以更新患者信息');
+            }
+
+            // 验证治疗师是否有权限更新这个患者
+            const { data: patient, error: checkError } = await supabase
+                .from('patients')
+                .select('therapist_id')
+                .eq('patient_id', patientId)
+                .single();
+
+            if (checkError) throw checkError;
+            if (patient.therapist_id !== user.id) {
+                throw new Error('无权更新此患者信息');
+            }
+
+            const { data, error } = await supabase
+                .from('patients')
+                .update(updates)
+                .eq('patient_id', patientId);
+
+            if (error) throw error;
+
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 重置患者密码（需要 Supabase 管理员权限或使用 email reset）
+    const resetPatientPassword = async (patientEmail) => {
+        try {
+            const { data, error } = await supabase.auth.resetPasswordForEmail(patientEmail, {
+                redirectTo: `${window.location.origin}/reset-password`,
+            });
+
+            if (error) throw error;
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 更新用户角色（管理员功能）
+    const updateUserRole = async (newRole) => {
+        try {
+            // 验证角色是否合法
+            if (!Object.values(ALLOWED_ROLES).includes(newRole)) {
+                throw new Error(`无效的角色类型。只允许: ${Object.values(ALLOWED_ROLES).join(', ')}`);
+            }
+
+            const { data, error } = await supabase.auth.updateUser({
+                data: { 
+                    role: newRole,
+                    role_updated_at: new Date().toISOString()
+                }
+            });
+            if (error) throw error;
+            return { data, error: null };
+        } catch (error) {
+            return { data: null, error };
+        }
+    };
+
+    // 登出函数
+    const signOut = async () => {
+        try {
+            const { error } = await supabase.auth.signOut();
+            if (error) throw error;
+            return { error: null };
+        } catch (error) {
+            return { error };
+        }
+    };
+
+    const value = {
+        session,
+        user,
+        loading,
+        signIn,
+        signUp,           // 通用注册
+        signUpAsUser,     // 用户注册
+        signUpAsTherapist, // 治疗师注册
+        signOut,
+        updateUserRole,
+        // 治疗师患者管理功能
+        createPatientAccount,
+        createMultiplePatientAccounts,
+        getTherapistPatients,
+        updatePatientInfo,
+        resetPatientPassword,
+        isAuthenticated: !!session,
+        // 角色检查助手函数
+        isTherapist: user?.user_metadata?.role === ALLOWED_ROLES.THERAPIST,
+        isUser: user?.user_metadata?.role === ALLOWED_ROLES.USER,
+        userRole: user?.user_metadata?.role,
+        ALLOWED_ROLES, // 导出允许的角色常量
+    };
+
+    return (
+        <AuthContext.Provider value={value}>
+            {children}
+        </AuthContext.Provider>
+    );
+};
+
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error("useAuth must be used within an AuthContextProvider");
+    }
+    return context;
+};

@@ -215,18 +215,37 @@ function AppContent() {
 
 
       {/* 更新导航按钮显示条件，包含 ai-conversation */}
- <div className="absolute top-4 right-4 z-10 flex gap-2">
-  <Button 
-    onClick={backToWelcome}
-    variant="outline"
-    className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
-  >
-    <Home className="w-4 h-4" />
-    Home
-  </Button>
+    <div className="absolute top-4 right-4 z-10 flex gap-2">
+      {user && (
+        <>
+          {isTherapist ? (
+            <Button
+              onClick={backToWelcome}
+              variant="outline"
+              className="gap-2 bg-white/80 backdrop-blur-sm hover:bg-white"
+            >
+              <Home className="w-4 h-4" />
+              Home
+            </Button>
+          ) : (
+            <Button
+              onClick={() => {
+                navigator.clipboard.writeText(user.id);
+                toast.success('User ID copied to clipboard!');
+              }}
+              variant="outline"
+              className="gap-2 bg-green-50 text-green-700 border border-green-300 hover:bg-green-100"
+            >
+              📋 Copy ID
+            </Button>
+          )}
+          {/* Only show LogoutButton when user is logged in */}
+          <LogoutButton />
+        </>
+      )}
+    </div>
 
-  <LogoutButton />
-</div>
+
 
 
 
