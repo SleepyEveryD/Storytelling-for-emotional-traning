@@ -208,3 +208,31 @@ function findBestMatch(scenarios: any[], analysis: any): any {
 
   return best;
 }
+export async function generateStoryFromConversation(fullPrompt: string) {
+  try {
+    // 这里不再拼自己的 prompt，直接使用调用方传入的 fullPrompt
+    const result = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: fullPrompt }],
+            },
+          ],
+        }),
+      }
+    );
+
+    const data = await result.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || null;
+  } catch (err) {
+    console.error("Story generation error:", err);
+    return null;
+  }
+}
+
+
